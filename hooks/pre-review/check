@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# pre-review: handoff gate before independent reviewers.
+# Failure mode: review without verified inputs / missing review directory.
+# Note: implementer≠reviewer is NOT mechanically proven in v0 (contract + human).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+# shellcheck source=../../scripts/lib/status.sh
+source "$ROOT/scripts/lib/status.sh"
+# shellcheck source=../../scripts/lib/feature.sh
+source "$ROOT/scripts/lib/feature.sh"
+
+if ! resolve_feature_arg "${1:-}"; then
+  fail "feature" "FEATURE=<NNN-slug> or argument required"
+  print_summary
+  exit 1
+fi
+
+if [[ ! -f "$FEATURE_DIR/spec.md" ]]; then
+  fail "spec" "missing $FEATURE_DIR/spec.md"
+  print_summary
+  exit 1
+fi
+pass "spec"
+
+oq="$(count_open_questions "$FEATURE_DIR")"
+if [[ "$oq" -gt 0 ]]; then
+  fail "open-questions" "unresolved=$oq"
+else
+  pass "open-questions"
+fi
+
+echo "--- nested ./scripts/verify $FEATURE_NAME ---"
+if FEATURE="$FEATURE_NAME" "$ROOT/scripts/verify" "$FEATURE_NAME"; then
+  pass "verify"
+else
+  fail "verify" "FEATURE=$FEATURE_NAME ./scripts/verify failed"
+fi
+
+review_dir="$ROOT/harness/reviews/$FEATURE_NAME"
+if [[ ! -d "$review_dir" ]]; then
+  fail "review-dir" "missing $review_dir"
+else
+  pass "review-dir"
+fi
+
+print_summary
+exit "$VERIFY_FAILED"

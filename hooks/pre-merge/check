@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# pre-merge: merge-time mechanical enforcement (also used as push health check).
+# CI adapter supplies BASE_SHA/HEAD_SHA. Hook does not know GitHub event types.
+# Compatible with bash 3.2 (macOS).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+# shellcheck source=../../scripts/lib/status.sh
+source "$ROOT/scripts/lib/status.sh"
+# shellcheck source=../../scripts/lib/feature.sh
+source "$ROOT/scripts/lib/feature.sh"
+# shellcheck source=../../scripts/lib/resolve-features.sh
+source "$ROOT/scripts/lib/resolve-features.sh"
+
+CHANGED_FILE="$(mktemp)"
+trap 'rm -f "$CHANGED_FILE"' EXIT
+
+echo "--- nested ./scripts/verify (meta) ---"
+if FEATURE= "$ROOT/scripts/verify"; then
+  pass "verify-meta"
+else
+  fail "verify-meta" "./scripts/verify failed"
+fi
+
+if base_sha_is_invalid; then
+  skip "diff-scoped-feature-gates" "no_valid_push_base"
+  print_summary
+  exit "$VERIFY_FAILED"
+fi
+
+list_changed_files >"$CHANGED_FILE" || true
+
+FEATURES=""
+if [[ -n "${FEATURE:-}" ]]; then
+  resolve_feature_arg "$FEATURE" || exit 2
+  FEATURES="$FEATURE_NAME"
+else
+  FEATURES="$(resolve_features_from_changed_files <"$CHANGED_FILE" | tr '\n' ' ')"
+fi
+
+if changed_files_require_spec <"$CHANGED_FILE"; then
+  if [[ -z "$(echo "$FEATURES" | tr -d '[:space:]')" ]]; then
+    fail "spec-required" "structural/product changes without specs/NNN-* in diff"
+  else
+    pass "spec-required"
+  fi
+else
+  skip "spec-required" "only_exempt_paths_or_empty"
+fi
+
+if [[ -z "$(echo "$FEATURES" | tr -d '[:space:]')" ]]; then
+  skip "feature-gates" "no_features_in_diff"
+else
+  for feat in $FEATURES; do
+    fdir="$ROOT/specs/$feat"
+    if [[ ! -f "$fdir/spec.md" ]]; then
+      fail "feature-$feat" "missing specs/$feat/spec.md"
+      continue
+    fi
+
+    status="$(extract_fm "$fdir/spec.md" "status")"
+    oq="$(count_open_questions "$fdir")"
+    if [[ "$oq" -gt 0 ]]; then
+      fail "feature-$feat-open-questions" "unresolved=$oq"
+    else
+      pass "feature-$feat-open-questions"
+    fi
+
+    # draft + ONLY specs/<feat>/** and harness/reviews/<feat>/** → limited gate
+    if [[ "$status" == "draft" ]]; then
+      if is_draft_feature_spec_only "$feat" <"$CHANGED_FILE"; then
+        skip "feature-$feat-implementation-completeness" "draft_spec_only"
+        continue
+      else
+        fail "feature-$feat-draft" "draft-with-implementation (only specs/$feat/** and harness/reviews/$feat/** allowed)"
+        continue
+      fi
+    fi
+
+    # active / completed / other: status never exempts; run full FEATURE verify
+    echo "--- nested ./scripts/verify $feat ---"
+    if FEATURE="$feat" "$ROOT/scripts/verify" "$feat"; then
+      pass "feature-$feat-verify"
+    else
+      fail "feature-$feat-verify" "FEATURE=$feat ./scripts/verify failed"
+    fi
+  done
+fi
+
+if constitution_changed <"$CHANGED_FILE"; then
+  adr_added=0
+  while IFS= read -r f || [[ -n "$f" ]]; do
+    case "$f" in
+      docs/adr/*.md)
+        if grep -q '## Sync Impact Report' "$ROOT/$f" 2>/dev/null; then
+          adr_added=1
+          pass "constitution-adr-sync-impact"
+          break
+        fi
+        ;;
+    esac
+  done <"$CHANGED_FILE"
+  if [[ "$adr_added" -eq 0 ]]; then
+    fail "constitution-adr-sync-impact" "CONSTITUTION.md changed but no ADR with ## Sync Impact Report in diff"
+  fi
+
+  base_ref=""
+  if [[ -n "${BASE_SHA:-}" ]] && ! base_sha_is_invalid; then
+    base_ref="${BASE_SHA}"
+  elif git rev-parse --verify "origin/${MAIN_BRANCH}" >/dev/null 2>&1; then
+    base_ref="origin/${MAIN_BRANCH}"
+  elif git rev-parse --verify "${MAIN_BRANCH}" >/dev/null 2>&1; then
+    base_ref="${MAIN_BRANCH}"
+  fi
+
+  new_ver="$(grep -E '^Version:' "$ROOT/CONSTITUTION.md" | head -1 | awk '{print $2}')"
+  if [[ -n "$base_ref" ]] && git cat-file -e "${base_ref}:CONSTITUTION.md" 2>/dev/null; then
+    old_ver="$(git show "${base_ref}:CONSTITUTION.md" | grep -E '^Version:' | head -1 | awk '{print $2}')"
+    if [[ -n "$old_ver" && -n "$new_ver" && "$new_ver" != "$old_ver" ]]; then
+      lowest="$(printf '%s\n%s\n' "$old_ver" "$new_ver" | sort -V | head -1)"
+      if [[ "$lowest" == "$old_ver" ]]; then
+        pass "constitution-semver-bump"
+      else
+        fail "constitution-semver-bump" "Version must increase ($old_ver → $new_ver)"
+      fi
+    else
+      fail "constitution-semver-bump" "unable to compare versions (old='$old_ver' new='$new_ver')"
+    fi
+  else
+    if [[ -n "$new_ver" ]]; then
+      skip "constitution-semver-bump" "no_base_constitution"
+    else
+      fail "constitution-semver-bump" "missing Version in CONSTITUTION.md"
+    fi
+  fi
+else
+  skip "constitution-governance" "constitution_unchanged"
+fi
+
+print_summary
+exit "$VERIFY_FAILED"

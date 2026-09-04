@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+# Deterministic verification entrypoint.
+#   ./scripts/verify                  → global/meta only
+#   FEATURE=NNN-slug ./scripts/verify → meta + feature completeness
+# Status does NOT exempt review completeness when FEATURE is set.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+# shellcheck source=lib/status.sh
+source "$ROOT/scripts/lib/status.sh"
+# shellcheck source=lib/feature.sh
+source "$ROOT/scripts/lib/feature.sh"
+
+FEATURE_NAME=""
+if [[ -n "${1:-}" ]]; then
+  resolve_feature_arg "$1" || exit 2
+elif [[ -n "${FEATURE:-}" ]]; then
+  resolve_feature_arg "$FEATURE" || exit 2
+fi
+
+line_count() {
+  wc -l <"$1" | tr -d ' '
+}
+
+required_paths=(
+  "CONSTITUTION.md"
+  "AGENTS.md"
+  "CLAUDE.md"
+  "GEMINI.md"
+  ".github/copilot-instructions.md"
+  ".cursor/rules/agentic-engineering.mdc"
+  "docs/PRODUCT.md"
+  "docs/ARCHITECTURE.md"
+  "docs/REFERENCES.md"
+  "docs/CI.md"
+  "docs/ADOPTION.md"
+  "docs/LOOPS.md"
+  "docs/RUNTIME.md"
+  "docs/adr/0001-use-spec-driven-development.md"
+  "docs/adr/0002-agents-md-is-canonical.md"
+  "docs/adr/0003-separate-harness-and-agent.md"
+  "docs/adr/0004-mechanical-verification-first.md"
+  "docs/adr/0005-independent-reviewer.md"
+  "docs/adr/0009-lifecycle-hooks.md"
+  "docs/adr/0010-ci-authoritative-merge-gate.md"
+  "docs/adr/0011-code-quality-contract.md"
+  "docs/adr/0012-template-adoption.md"
+  "docs/adr/0013-loop-engineering.md"
+  "docs/adr/0014-portable-agent-runtime.md"
+  "specs/_template/spec.md"
+  "scripts/bootstrap"
+  "scripts/new-feature"
+  "scripts/verify"
+  "scripts/adopt"
+  "scripts/lib/status.sh"
+  ".editorconfig"
+  ".gitattributes"
+  "hooks/README.md"
+  "hooks/pre-implement/check"
+  "hooks/post-implement/check"
+  "hooks/pre-review/check"
+  "hooks/pre-merge/check"
+  "rules/architecture.md"
+  "rules/code-quality.md"
+  "agents/implementer.md"
+  "agents/code-quality-reviewer.md"
+)
+
+missing=0
+for p in "${required_paths[@]}"; do
+  if [[ ! -e "$ROOT/$p" ]]; then
+    echo "  missing: $p"
+    missing=1
+  fi
+done
+if [[ "$missing" -eq 0 ]]; then
+  pass "layout"
+else
+  fail "layout" "required paths missing"
+fi
+
+if [[ -f "$ROOT/AGENTS.md" ]]; then
+  lines="$(line_count "$ROOT/AGENTS.md")"
+  bytes="$(wc -c <"$ROOT/AGENTS.md" | tr -d ' ')"
+  if (( lines > 250 )); then
+    fail "agents-md-budget" "AGENTS.md has ${lines} lines (max 250)"
+  elif (( bytes > 24000 )); then
+    fail "agents-md-budget" "AGENTS.md has ${bytes} bytes (max 24000)"
+  else
+    pass "agents-md-budget"
+  fi
+else
+  fail "agents-md-budget" "AGENTS.md missing"
+fi
+
+check_shim() {
+  local path="$1"
+  local label="$2"
+  local max_lines="${3:-20}"
+  if [[ ! -f "$ROOT/$path" ]]; then
+    fail "$label" "missing $path"
+    return
+  fi
+  local lines bytes
+  lines="$(line_count "$ROOT/$path")"
+  bytes="$(wc -c <"$ROOT/$path" | tr -d ' ')"
+  if (( lines > max_lines )); then
+    fail "$label" "$path has ${lines} lines (max ${max_lines})"
+    return
+  fi
+  if (( bytes > 1024 )); then
+    fail "$label" "$path has ${bytes} bytes (max 1024)"
+    return
+  fi
+  if ! grep -q "AGENTS.md" "$ROOT/$path"; then
+    fail "$label" "$path must reference AGENTS.md"
+    return
+  fi
+  pass "$label"
+}
+
+check_shim "CLAUDE.md" "shim-claude"
+check_shim "GEMINI.md" "shim-gemini"
+check_shim ".github/copilot-instructions.md" "shim-copilot"
+check_shim ".cursor/rules/agentic-engineering.mdc" "shim-cursor" 30
+
+if grep -qE '^Version:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/CONSTITUTION.md"; then
+  pass "constitution-version"
+else
+  fail "constitution-version" "CONSTITUTION.md must declare Version: X.Y.Z"
+fi
+
+if [[ -f "$ROOT/specs/001-template-v0/spec.md" ]]; then
+  if grep -q '^status:[[:space:]]*completed' "$ROOT/specs/001-template-v0/spec.md" 2>/dev/null; then
+    pass "dogfood-001-completed"
+  else
+    fail "dogfood-001-completed" "specs/001-template-v0 must remain status: completed while present"
+  fi
+else
+  skip "dogfood-001-completed" "adopted_or_absent"
+fi
+
+# --- bash -n harness syntax ---
+bash_n_failed=0
+while IFS= read -r script || [[ -n "$script" ]]; do
+  [[ -z "$script" ]] && continue
+  if ! bash -n "$script" 2>/dev/null; then
+    echo "  bash -n failed: $script"
+    bash_n_failed=1
+  fi
+done <<EOF
+$(find "$ROOT/hooks" -type f -name check 2>/dev/null | sort)
+$(find "$ROOT/scripts" -type f -name '*.sh' 2>/dev/null | sort)
+$ROOT/scripts/bootstrap
+$ROOT/scripts/new-feature
+$ROOT/scripts/verify
+$ROOT/scripts/adopt
+EOF
+
+if [[ "$bash_n_failed" -eq 0 ]]; then
+  pass "bash-syntax"
+else
+  fail "bash-syntax" "bash -n failed on one or more harness scripts"
+fi
+
+skip "format" "not_configured"
+skip "lint" "not_configured"
+skip "typecheck" "not_configured"
+skip "architecture" "not_configured"
+skip "complexity" "not_configured"
+skip "dead-code" "not_configured"
+skip "unit-test" "not_configured"
+skip "integration-test" "not_configured"
+skip "acceptance-test" "not_configured"
+skip "security-scan" "not_configured"
+
+check_feature_completeness() {
+  local name="$1"
+  local feature_path="$ROOT/specs/$name"
+  if [[ ! -f "$feature_path/spec.md" ]]; then
+    fail "feature-$name" "missing specs/$name/spec.md"
+    return
+  fi
+
+  local status profile
+  status="$(extract_fm "$feature_path/spec.md" "status")"
+  profile="$(extract_fm "$feature_path/spec.md" "profile")"
+
+  if [[ -z "$status" ]]; then
+    fail "feature-$name-status" "missing status in front matter"
+  else
+    pass "feature-$name-status"
+  fi
+  if [[ -z "$profile" ]]; then
+    fail "feature-$name-profile" "missing profile in front matter"
+    return
+  fi
+  if [[ "$profile" != "lean" && "$profile" != "full" ]]; then
+    fail "feature-$name-profile" "unknown profile '$profile'"
+    return
+  fi
+  pass "feature-$name-profile"
+
+  local oq
+  oq="$(count_open_questions "$feature_path")"
+  if [[ "$oq" -gt 0 ]]; then
+    fail "feature-$name-open-questions" "unresolved=$oq"
+  else
+    pass "feature-$name-open-questions"
+  fi
+
+  # Status never exempts review completeness when FEATURE is scoped.
+  local required=(product.md test.md code-quality.md)
+  if [[ "$profile" == "full" ]]; then
+    required=(product.md test.md code-quality.md architecture.md security.md final.md analyze.md)
+  fi
+
+  local review_dir="$ROOT/harness/reviews/$name"
+  local missing_list=()
+  local f
+  for f in "${required[@]}"; do
+    if [[ ! -f "$review_dir/$f" ]]; then
+      missing_list+=("$f")
+    fi
+  done
+
+  if ((${#missing_list[@]} > 0)); then
+    fail "feature-$name-reviews" "profile=${profile} missing: ${missing_list[*]}"
+  else
+    pass "feature-$name-reviews"
+  fi
+
+  # Presence-only: required evaluator artifacts declare reviewer_role.
+  # analyze.md is a consistency artifact — exempt. Identity not attested.
+  local role_missing=()
+  for f in "${required[@]}"; do
+    if [[ "$f" == "analyze.md" ]]; then
+      continue
+    fi
+    if ! grep -q 'reviewer_role:' "$review_dir/$f"; then
+      role_missing+=("$f")
+    fi
+  done
+  if ((${#role_missing[@]} > 0)); then
+    fail "feature-$name-reviewer-role" "missing reviewer_role: ${role_missing[*]}"
+  else
+    pass "feature-$name-reviewer-role"
+  fi
+}
+
+if [[ -n "$FEATURE_NAME" ]]; then
+  check_feature_completeness "$FEATURE_NAME"
+else
+  skip "feature-completeness" "no_feature_scope"
+fi
+
+print_summary
+exit "$VERIFY_FAILED"

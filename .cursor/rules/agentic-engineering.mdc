@@ -1,0 +1,7 @@
+---
+description: Canonical agent engineering workflow
+alwaysApply: true
+---
+
+Follow the canonical repository instructions in @AGENTS.md.
+Do not duplicate policy in Cursor-specific files.

@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Convert a fresh "Use this template" clone into a project Project OS.
+# Removes known template dogfood features only. Unknown numbered specs → FAIL.
+# Intended to run once immediately after creating a repo from the template.
+# Compatible with bash 3.2 (macOS).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+# Fixed list — update when the template adds a new dogfood feature.
+EXPECTED_TEMPLATE_FEATURES="
+001-template-v0
+002-lifecycle-hooks
+003-ci-authoritative-merge-gate
+004-code-quality-contract
+005-template-adoption
+006-loop-engineering
+007-portable-agent-runtime
+"
+
+echo "=== agentic adopt ==="
+echo "Root: $ROOT"
+echo
+
+list_numbered_features() {
+  local d base
+  shopt -s nullglob
+  for d in "$ROOT"/specs/[0-9][0-9][0-9]-*; do
+    [[ -d "$d" ]] || continue
+    base="$(basename "$d")"
+    echo "$base"
+  done
+  shopt -u nullglob
+}
+
+is_expected() {
+  local feat="$1" x
+  for x in $EXPECTED_TEMPLATE_FEATURES; do
+    [[ "$x" == "$feat" ]] && return 0
+  done
+  return 1
+}
+
+# Collect present expected / unexpected
+PRESENT_EXPECTED=""
+UNEXPECTED=""
+PRESENT_COUNT=0
+while IFS= read -r feat || [[ -n "$feat" ]]; do
+  [[ -z "$feat" ]] && continue
+  if is_expected "$feat"; then
+    PRESENT_EXPECTED="$PRESENT_EXPECTED $feat"
+    PRESENT_COUNT=$((PRESENT_COUNT + 1))
+  else
+    UNEXPECTED="$UNEXPECTED $feat"
+  fi
+done <<EOF
+$(list_numbered_features)
+EOF
+
+if [[ -n "$(echo "$UNEXPECTED" | tr -d '[:space:]')" ]]; then
+  echo "error: unknown numbered feature(s) present — refuse to delete:" >&2
+  for f in $UNEXPECTED; do
+    echo "  - $f" >&2
+  done
+  echo "Update EXPECTED_TEMPLATE_FEATURES in scripts/adopt only for template dogfood," >&2
+  echo "or move/remove unknown features manually." >&2
+  exit 1
+fi
+
+if [[ "$PRESENT_COUNT" -eq 0 ]]; then
+  echo "Already adopted (no template dogfood features found)."
+  echo "Nothing to remove."
+  echo
+  echo "Next:"
+  echo "  1. Edit docs/PRODUCT.md, docs/DOMAIN.md, docs/GLOSSARY.md"
+  echo "  2. Configure GitHub settings per docs/ADOPTION.md"
+  echo "  3. ./scripts/new-feature <slug>   # starts at 001"
+  exit 0
+fi
+
+echo "Removing template dogfood features:"
+for feat in $PRESENT_EXPECTED; do
+  echo "  - $feat"
+  rm -rf "$ROOT/specs/$feat"
+  rm -rf "$ROOT/harness/reviews/$feat"
+  rm -f "$ROOT/harness/context/${feat}.md"
+done
+echo
+
+# Reset product/domain docs from templates
+TEMPLATE_DIR="$ROOT/docs/_templates"
+mkdir -p "$ROOT/docs"
+
+if [[ -f "$TEMPLATE_DIR/PRODUCT.md" ]]; then
+  cp "$TEMPLATE_DIR/PRODUCT.md" "$ROOT/docs/PRODUCT.md"
+  echo "Wrote docs/PRODUCT.md (project placeholder)"
+else
+  echo "warning: missing $TEMPLATE_DIR/PRODUCT.md" >&2
+fi
+
+if [[ -f "$TEMPLATE_DIR/DOMAIN.md" ]]; then
+  cp "$TEMPLATE_DIR/DOMAIN.md" "$ROOT/docs/DOMAIN.md"
+  echo "Wrote docs/DOMAIN.md (stub)"
+fi
+
+if [[ -f "$TEMPLATE_DIR/GLOSSARY.md" ]]; then
+  cp "$TEMPLATE_DIR/GLOSSARY.md" "$ROOT/docs/GLOSSARY.md"
+  echo "Wrote docs/GLOSSARY.md (stub)"
+fi
+
+echo
+echo "Preserved: CONSTITUTION, AGENTS, rules, agents, hooks, scripts,"
+echo "  ARCHITECTURE, CI, ADOPTION, REFERENCES, ADR, specs/_template"
+echo
+echo "Running ./scripts/verify ..."
+if ! "$ROOT/scripts/verify"; then
+  echo "warning: verify failed after adopt — fix before first feature" >&2
+  exit 1
+fi
+
+echo
+echo "adopt: ok"
+echo
+echo "Next:"
+echo "  1. Fill docs/PRODUCT.md / DOMAIN.md / GLOSSARY.md"
+echo "  2. Follow GitHub checklist in docs/ADOPTION.md"
+echo "  3. ./scripts/new-feature <first-slug>"

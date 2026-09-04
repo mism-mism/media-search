@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Create project DOMAIN/GLOSSARY stubs if missing (non-interactive).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+TEMPLATE_DIR="$ROOT/docs/_templates"
+created=0
+
+copy_if_missing() {
+  local name="$1"
+  local dest="$ROOT/docs/$name"
+  local src="$TEMPLATE_DIR/$name"
+  if [[ -f "$dest" ]]; then
+    echo "Exists: docs/$name"
+  else
+    if [[ ! -f "$src" ]]; then
+      echo "error: missing template $src" >&2
+      exit 1
+    fi
+    cp "$src" "$dest"
+    echo "Created: docs/$name"
+    created=1
+  fi
+}
+
+copy_if_missing "DOMAIN.md"
+copy_if_missing "GLOSSARY.md"
+
+echo
+if [[ "$created" -eq 1 ]]; then
+  echo "TODO:"
+  echo "  Define project domain and glossary before implementing product behavior."
+else
+  echo "Nothing to create."
+fi
+
+echo "bootstrap: ok"

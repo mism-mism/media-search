@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# pre-implement: gate before coding a feature.
+# Failure mode: starting implementation with unresolved ambiguity or incomplete prep.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+# shellcheck source=../../scripts/lib/status.sh
+source "$ROOT/scripts/lib/status.sh"
+# shellcheck source=../../scripts/lib/feature.sh
+source "$ROOT/scripts/lib/feature.sh"
+
+if ! resolve_feature_arg "${1:-}"; then
+  fail "feature" "FEATURE=<NNN-slug> or argument required"
+  print_summary
+  exit 1
+fi
+
+if [[ ! -f "$FEATURE_DIR/spec.md" ]]; then
+  fail "spec" "missing $FEATURE_DIR/spec.md"
+  print_summary
+  exit 1
+fi
+pass "spec"
+
+profile="$(extract_fm "$FEATURE_DIR/spec.md" "profile")"
+status="$(extract_fm "$FEATURE_DIR/spec.md" "status")"
+
+if [[ -z "$profile" ]]; then
+  fail "profile" "missing profile in front matter"
+else
+  pass "profile"
+fi
+
+if [[ -z "$status" ]]; then
+  fail "status" "missing status in front matter"
+elif [[ "$status" == "completed" ]]; then
+  fail "status" "completed features are not implementable"
+elif [[ "$status" != "active" ]]; then
+  fail "status" "status must be active to implement (got '$status')"
+else
+  pass "status"
+fi
+
+oq="$(count_open_questions "$FEATURE_DIR")"
+if [[ "$oq" -gt 0 ]]; then
+  fail "open-questions" "unresolved=$oq"
+else
+  pass "open-questions"
+fi
+
+if [[ "$profile" == "full" ]]; then
+  if [[ ! -f "$FEATURE_DIR/checklist.md" ]]; then
+    fail "checklist" "full profile requires checklist.md"
+  elif checklist_has_unchecked "$FEATURE_DIR/checklist.md"; then
+    fail "checklist" "unchecked items remain (- [ ])"
+  else
+    pass "checklist"
+  fi
+else
+  skip "checklist" "lean_profile"
+fi
+
+print_summary
+exit "$VERIFY_FAILED"

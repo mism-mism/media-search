@@ -1,0 +1,27 @@
+# Runtime harness logs (not curated SoR)
+harness/logs/**
+!harness/logs/.gitkeep
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies / build (adopting projects may extend)
+node_modules/
+dist/
+build/
+coverage/
+.venv/
+__pycache__/
+*.pyc
+
+# Worktrees (optional local convention)
+.worktrees/

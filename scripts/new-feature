@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Create specs/NNN-<slug>/ from specs/_template.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [[ $# -lt 1 ]]; then
+  echo "usage: ./scripts/new-feature <slug>" >&2
+  echo "  slug: lowercase letters, digits, hyphens (e.g. asset-search)" >&2
+  exit 2
+fi
+
+SLUG="$1"
+if [[ ! "$SLUG" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+  echo "error: invalid slug '$SLUG'" >&2
+  exit 2
+fi
+
+TEMPLATE="$ROOT/specs/_template"
+if [[ ! -d "$TEMPLATE" ]]; then
+  echo "error: missing $TEMPLATE" >&2
+  exit 1
+fi
+
+# Next numeric id from existing specs/NNN-* directories
+max=0
+shopt -s nullglob
+for d in "$ROOT"/specs/[0-9][0-9][0-9]-*; do
+  base="$(basename "$d")"
+  num="${base%%-*}"
+  if [[ "$num" =~ ^[0-9]+$ ]]; then
+    # 10# avoids octal interpretation
+    n=$((10#$num))
+    if (( n > max )); then max=$n; fi
+  fi
+done
+shopt -u nullglob
+
+next=$((max + 1))
+id="$(printf '%03d' "$next")"
+dir="$ROOT/specs/${id}-${SLUG}"
+
+if [[ -e "$dir" ]]; then
+  echo "error: already exists: specs/${id}-${SLUG}" >&2
+  exit 1
+fi
+
+mkdir -p "$dir"
+for f in spec.md clarify.md plan.md tasks.md checklist.md metrics.md; do
+  if [[ ! -f "$TEMPLATE/$f" ]]; then
+    echo "error: missing template file $f" >&2
+    exit 1
+  fi
+  cp "$TEMPLATE/$f" "$dir/$f"
+done
+
+# Stamp front matter id/status/profile and feature title placeholders
+FEATURE_TITLE="$SLUG"
+# macOS/BSD and GNU sed differ; use portable temp rewrite
+stamp_file() {
+  local file="$1"
+  local tmp
+  tmp="$(mktemp)"
+  awk -v id="$id" -v title="$FEATURE_TITLE" '
+    BEGIN { in_fm=0; fm_done=0 }
+    NR==1 && $0=="---" { in_fm=1; print; next }
+    in_fm && $0=="---" {
+      in_fm=0; fm_done=1
+      print
+      next
+    }
+    in_fm && $0 ~ /^id:/ { print "id: \"" id "\""; next }
+    in_fm && $0 ~ /^status:/ { print "status: active"; next }
+    in_fm && $0 ~ /^profile:/ { print "profile: lean"; next }
+    {
+      gsub(/<Feature Name>/, title)
+      print
+    }
+  ' "$file" >"$tmp"
+  mv -f "$tmp" "$file"
+}
+
+stamp_file "$dir/spec.md"
+for f in clarify.md plan.md tasks.md checklist.md metrics.md; do
+  stamp_file "$dir/$f"
+done
+
+mkdir -p "$ROOT/harness/reviews/${id}-${SLUG}"
+
+echo "Created: specs/${id}-${SLUG}/"
+echo "  spec.md clarify.md plan.md tasks.md checklist.md metrics.md"
+echo "  harness/reviews/${id}-${SLUG}/ (empty; add review artifacts before merge)"
+echo
+echo "Next:"
+echo "  1. Edit specs/${id}-${SLUG}/spec.md (set profile if risk requires full)"
+echo "  2. Resolve Open Questions with a human before implementing"
+echo "  3. Run ./scripts/verify"
