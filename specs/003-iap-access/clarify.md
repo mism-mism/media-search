@@ -7,15 +7,15 @@ must be locked before Terraform/CD changes.
 
 ## Questions
 
-| ID | Question | Status |
-|----|----------|--------|
-| Q1 | IAP placement | open — edge IAP only vs app verifies IAP JWT too |
-| Q2 | Allowed principals | open — Google Group vs individual users vs both |
-| Q3 | OAuth brand | open — Internal (Workspace) vs External |
-| Q4 | Dev/staging exception | open — keep public invoker flag for non-prod? |
-| Q5 | IAP on load balancer vs Cloud Run IAP | open — recommended Cloud Run IAP |
-| Q6 | Service account invokers (CD smoke) | open — how smoke works behind IAP |
-| Q7 | Workspace / org requirement | open — Google Workspace required? |
+| ID | Question | Options | Status |
+|----|----------|---------|--------|
+| Q1 | App verifies IAP JWT? | A edge-only / B app verifies JWT | resolved → A |
+| Q2 | Allowed principals | A Google Group / B users / C both | resolved → A |
+| Q3 | OAuth brand | A Internal / B External | resolved → A |
+| Q4 | Non-prod exception | A always IAP / B flag for public dev | resolved → B |
+| Q5 | IAP attachment | A Cloud Run IAP / B HTTPS LB + IAP | open |
+| Q6 | Smoke behind IAP | A gcloud user browser / B SA + IAP tunnel / C skip automated | open |
+| Q7 | Google Workspace required? | A yes (Internal brand) / B allow without | open (likely A given Q3) |
 
 ## Decisions
 
@@ -23,8 +23,12 @@ must be locked before Terraform/CD changes.
 |----|----------|------------|------|
 | D0 | IAP is a **separate** Feature/PR/workspace from 002 | Human | 2026-09-05 |
 | D1 | Production cutover **only after** IAP converges | Human | 2026-09-05 |
-| D2 | 002 PR remains unauthenticated v0 plumbing (no scope change there) | Human | 2026-09-05 |
+| D2 | 002 PR remains unauthenticated v0 plumbing | Human | 2026-09-05 |
+| D3 | **Edge IAP only** — app stays auth-agnostic (no IAP JWT check in app) | Human | 2026-09-05 |
+| D4 | Allowlist via **one Google Group** | Human | 2026-09-05 |
+| D5 | OAuth brand **Internal** (Workspace) | Human | 2026-09-05 |
+| D6 | Terraform flag: non-prod may allow unauthenticated; **prod = IAP required** | Human | 2026-09-05 |
 
 ## Unresolved items
 
-- Q1–Q7 (blocking for AC1 / implementation)
+- Q5–Q7 (blocking for plan/Terraform shape)

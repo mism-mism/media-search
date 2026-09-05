@@ -47,9 +47,12 @@ individual accounts.
   invoker.
 - R6. Local (001) and unauthenticated **dev** paths may remain, but must be
   clearly separated from “production” docs/gates.
-- R7. Domain / Application still have **no** GCP auth SDK requirement for
-  request handling (IAP terminates at Google edge; app may stay auth-agnostic
-  in v0 unless clarify selects app-level checks).
+- R7. Domain / Application remain **auth-agnostic** (IAP at Google edge only;
+  no app-level IAP JWT verification in 003).
+- R8. Allowed access = members of a configured **Google Group** (Terraform var).
+- R9. OAuth consent brand = **Internal** (Google Workspace).
+- R10. Terraform supports a **non-prod** flag that may keep public invoker for
+  experiments; **production tfvars / docs must require IAP** (no anonymous).
 
 ## Acceptance Criteria
 
