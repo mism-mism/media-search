@@ -4,17 +4,24 @@ from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from media_search.adapters.local_media_storage import LocalMediaStorage
-from media_search.application.frame_paths import frame_cache_path
-from media_search.application.import_directory import ImportDirectory, ImportSummary
-from media_search.application.search_media import EmptyQueryError, SearchMediaAssets
+from media_search.application.import_directory import ImportDirectory
+from media_search.application.library import LibraryService
+from media_search.application.search_media import (
+    EmptyImageError,
+    EmptyQueryError,
+    SearchMediaAssets,
+)
 from media_search.domain.media_asset import MediaType
+from media_search.ports.frame_store import FrameStorePort
+from media_search.ports.import_job import ImportJobPort, ImportJobStatus
+from media_search.ports.import_lock import ImportLockBusy
 from media_search.ports.media_storage import MediaStoragePort
-from media_search.ports.search import MetadataRepositoryPort, SearchQuery
+from media_search.ports.search import ImageSearchQuery, MetadataRepositoryPort, SearchQuery
 
 
 def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
@@ -22,9 +29,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     if embedder_mode == "fake":
         warn = (
             '<p style="color:#a40;font-weight:600">'
-            "いまは EMBEDDER=fake です。意味検索の精度は出ません。"
-            "精度確認は <code>docker compose --profile local up --build media-search-local</code> "
-            "で再 import してください。"
+            "EMBEDDER=fake — semantic quality is off. Use local OpenCLIP for real search."
             "</p>"
         )
     return f"""<!DOCTYPE html>
@@ -32,63 +37,282 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>media-search</title>
+  <title>media-search library</title>
   <style>
     :root {{ font-family: ui-sans-serif, system-ui, sans-serif; color: #102015; }}
-    body {{ margin: 1.5rem; max-width: 920px; }}
-    input, button, select {{ font: inherit; padding: 0.4rem 0.55rem; }}
-    .row {{ display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }}
-    .hit {{ display: grid; grid-template-columns: 96px 1fr; gap: 0.75rem;
-           border-top: 1px solid #d5ddd7; padding: 0.75rem 0; }}
+    body {{ margin: 1.25rem; max-width: 1100px; }}
+    input, button, select {{ font: inherit; padding: 0.35rem 0.5rem; }}
+    .row {{ display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; align-items: center; }}
+    .layout {{ display: grid; grid-template-columns: 220px 1fr; gap: 1rem; }}
+    @media (max-width: 720px) {{ .layout {{ grid-template-columns: 1fr; }} }}
+    .panel {{ border: 1px solid #d5ddd7; padding: 0.75rem; min-height: 12rem; }}
+    .hit {{ display: grid; grid-template-columns: 96px 1fr auto; gap: 0.75rem;
+           border-top: 1px solid #d5ddd7; padding: 0.65rem 0; align-items: center; }}
     .hit img {{ width: 96px; height: 72px; object-fit: cover; background: #eef2ef; }}
     .muted {{ color: #5b6a60; font-size: 0.85rem; }}
+    .folder {{ display:block; padding: 0.25rem 0; cursor: pointer; }}
+    .folder.active {{ font-weight: 700; }}
     a {{ color: #0b5; }}
-    code {{ font-size: 0.85em; }}
+    #status {{
+      border: 1px solid #c5d0c8; background: #f4f7f5; padding: 0.65rem 0.75rem;
+      margin-bottom: 0.75rem; min-height: 2.5rem;
+    }}
+    #status.busy {{ border-color: #c9a227; background: #fff8e6; }}
+    #status.ok {{ border-color: #8bbb8b; background: #eef8ee; }}
+    #status.err {{ border-color: #c97a7a; background: #fbeeee; }}
+    .actions {{ display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }}
+    .actions select {{ max-width: 10rem; }}
   </style>
 </head>
 <body>
   <h1>media-search</h1>
   <p class="muted">mode=<strong>{embedder_mode}</strong> · {embedder_id}</p>
   {warn}
-  <p class="muted">semantic query + mediaType / tags (AND)</p>
+  <div id="status" class="muted">待機中</div>
   <div class="row">
-    <input id="q" size="40" placeholder="例: 女性 / a woman outdoors" />
+    <input id="q" size="36" placeholder="意味検索…" />
     <select id="mediaType">
-      <option value="">any type</option>
+      <option value="">any</option>
       <option value="image">image</option>
       <option value="video">video</option>
     </select>
-    <input id="tags" size="24" placeholder="tags comma-separated" />
     <button id="go">Search</button>
   </div>
-  <div id="out"></div>
+  <div class="layout">
+    <div class="panel">
+      <div class="row">
+        <strong>Folders</strong>
+        <button id="rootBtn">/</button>
+      </div>
+      <div id="folders"></div>
+      <div class="row">
+        <input id="newFolder" size="12" placeholder="new folder" />
+        <button id="addFolder">Add</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="row">
+        <span id="crumb" class="muted">folder: (root)</span>
+        <input id="file" type="file" accept=".jpg,.jpeg,.png,.mp4" multiple />
+        <button id="upload">Upload</button>
+      </div>
+      <div id="assets"></div>
+      <div id="out"></div>
+    </div>
+  </div>
   <script>
+    let currentFolder = null;
+    let folderCache = [];
+    let busy = false;
+    const foldersEl = document.getElementById('folders');
+    const assetsEl = document.getElementById('assets');
     const out = document.getElementById('out');
+    const statusEl = document.getElementById('status');
+    const crumb = document.getElementById('crumb');
+    const uploadBtn = document.getElementById('upload');
+
+    function setStatus(msg, kind) {{
+      statusEl.textContent = msg;
+      statusEl.className = kind || 'muted';
+    }}
+
+    async function pollJob(id) {{
+      for (;;) {{
+        const res = await fetch('/api/import/jobs/' + encodeURIComponent(id));
+        const body = await res.json();
+        if (!res.ok) {{
+          setStatus('Import 状態取得失敗: ' + JSON.stringify(body), 'err');
+          return body;
+        }}
+        const p = body.processed != null && body.total != null
+          ? ` ${{body.processed}}/${{body.total}}` : '';
+        const label = body.status === 'queued' ? 'キュー待ち'
+          : body.status === 'running' ? 'インデックス処理中'
+          : body.status === 'succeeded' ? '完了'
+          : body.status === 'failed' ? '失敗'
+          : body.status;
+        setStatus(`Import: ${{label}}${{p}}` + (body.error ? ' — ' + body.error : ''),
+          body.status === 'failed' ? 'err'
+            : (body.status === 'succeeded' ? 'ok' : 'busy'));
+        if (body.status === 'succeeded' || body.status === 'failed') {{
+          await refreshAssets();
+          return body;
+        }}
+        await new Promise(r => setTimeout(r, 800));
+      }}
+    }}
+
+    async function loadAllFolders() {{
+      const res = await fetch('/api/library/folders?all=1');
+      const body = await res.json();
+      folderCache = body.folders || [];
+      return folderCache;
+    }}
+
+    function folderOptionsHtml(selected) {{
+      const opts = ['<option value="">(root)</option>']
+        .concat(folderCache.map(f =>
+          `<option value="${{f.folder_id}}" ${{f.folder_id === selected ? 'selected' : ''}}>${{f.name}}</option>`
+        ));
+      return opts.join('');
+    }}
+
+    async function refreshFolders() {{
+      const params = new URLSearchParams();
+      if (currentFolder) params.set('parent_id', currentFolder);
+      const res = await fetch('/api/library/folders?' + params.toString());
+      const body = await res.json();
+      foldersEl.innerHTML = (body.folders || []).map(f =>
+        `<a class="folder" data-id="${{f.folder_id}}">${{f.name}}</a>`
+      ).join('') || '<p class="muted">no subfolders</p>';
+      foldersEl.querySelectorAll('.folder').forEach(el => {{
+        el.onclick = () => {{ currentFolder = el.dataset.id; refreshAll(); }};
+      }});
+    }}
+
+    async function refreshAssets() {{
+      const params = new URLSearchParams();
+      if (currentFolder) params.set('folder_id', currentFolder);
+      else params.set('folder_id', '');
+      const res = await fetch('/api/library/assets?' + params.toString());
+      const body = await res.json();
+      assetsEl.innerHTML = (body.assets || []).map(a => `
+        <div class="hit">
+          <img src="${{a.thumbnail_url}}" alt="" />
+          <div>
+            <div><a href="/api/assets/${{encodeURI(a.asset_id)}}">${{a.display_name || a.asset_id}}</a></div>
+            <div class="muted">${{a.media_type}} · <code>${{a.asset_id}}</code></div>
+          </div>
+          <div class="actions">
+            <button data-ren="${{a.asset_id}}">Rename</button>
+            <select data-mov="${{a.asset_id}}" title="Move to folder">
+              ${{folderOptionsHtml(a.folder_id || '')}}
+            </select>
+            <button data-del="${{a.asset_id}}">Delete</button>
+          </div>
+        </div>`).join('') || '<p class="muted">empty folder</p>';
+      assetsEl.querySelectorAll('[data-del]').forEach(btn => {{
+        btn.onclick = async () => {{
+          if (!confirm('Delete?')) return;
+          setStatus('削除中…', 'busy');
+          await fetch('/api/library/assets/' + encodeURIComponent(btn.dataset.del), {{ method: 'DELETE' }});
+          setStatus('削除しました', 'ok');
+          refreshAssets();
+        }};
+      }});
+      assetsEl.querySelectorAll('[data-ren]').forEach(btn => {{
+        btn.onclick = async () => {{
+          const name = prompt('New name');
+          if (!name) return;
+          setStatus('リネーム中…', 'busy');
+          await fetch('/api/library/assets/' + encodeURIComponent(btn.dataset.ren), {{
+            method: 'PATCH', headers: {{'Content-Type':'application/json'}},
+            body: JSON.stringify({{ display_name: name }})
+          }});
+          setStatus('リネームしました', 'ok');
+          refreshAssets();
+        }};
+      }});
+      assetsEl.querySelectorAll('select[data-mov]').forEach(sel => {{
+        sel.onchange = async () => {{
+          const fid = sel.value || null;
+          setStatus('移動中…', 'busy');
+          const res = await fetch('/api/library/assets/' + encodeURIComponent(sel.dataset.mov), {{
+            method: 'PATCH', headers: {{'Content-Type':'application/json'}},
+            body: JSON.stringify({{ folder_id: fid }})
+          }});
+          if (!res.ok) {{
+            setStatus('移動失敗: ' + await res.text(), 'err');
+            return;
+          }}
+          setStatus('移動しました', 'ok');
+          refreshAssets();
+        }};
+      }});
+    }}
+
+    async function refreshAll() {{
+      crumb.textContent = 'folder: ' + (currentFolder || '(root)');
+      await loadAllFolders();
+      await refreshFolders();
+      await refreshAssets();
+      out.innerHTML = '';
+    }}
+
+    document.getElementById('rootBtn').onclick = () => {{ currentFolder = null; refreshAll(); }};
+    document.getElementById('addFolder').onclick = async () => {{
+      const name = document.getElementById('newFolder').value.trim();
+      if (!name) return;
+      await fetch('/api/library/folders', {{
+        method: 'POST', headers: {{'Content-Type':'application/json'}},
+        body: JSON.stringify({{ name, parent_id: currentFolder }})
+      }});
+      document.getElementById('newFolder').value = '';
+      await loadAllFolders();
+      refreshFolders();
+    }};
+    uploadBtn.onclick = async () => {{
+      const input = document.getElementById('file');
+      const files = Array.from(input.files || []);
+      if (!files.length) {{
+        setStatus('ファイルを選んでください', 'err');
+        return;
+      }}
+      if (busy) return;
+      busy = true;
+      uploadBtn.disabled = true;
+      try {{
+        setStatus(`アップロード中 0/${{files.length}}…`, 'busy');
+        const fd = new FormData();
+        files.forEach(f => fd.append('files', f));
+        if (currentFolder) fd.append('folder_id', currentFolder);
+        const res = await fetch('/api/library/upload', {{ method: 'POST', body: fd }});
+        const body = await res.json();
+        if (!res.ok) {{
+          setStatus('アップロード失敗: ' + JSON.stringify(body), 'err');
+          return;
+        }}
+        const n = (body.assets || []).length || (body.asset ? 1 : 0);
+        setStatus(`${{n}} 件アップロード完了。インデックス開始…`, 'busy');
+        input.value = '';
+        await refreshAssets();
+        const job = body.job;
+        if (job && job.job_id) {{
+          await pollJob(job.job_id);
+        }} else {{
+          setStatus(`${{n}} 件アップロード完了（Import ジョブなし）`, 'ok');
+        }}
+      }} finally {{
+        busy = false;
+        uploadBtn.disabled = false;
+      }}
+    }};
     document.getElementById('go').onclick = async () => {{
       const q = document.getElementById('q').value;
       const mediaType = document.getElementById('mediaType').value;
-      const tags = document.getElementById('tags').value.split(',').map(s => s.trim()).filter(Boolean);
       const params = new URLSearchParams({{ q }});
       if (mediaType) params.set('media_type', mediaType);
-      tags.forEach(t => params.append('tags', t));
+      setStatus('検索中…', 'busy');
       const res = await fetch('/api/search?' + params.toString());
       const body = await res.json();
-      if (!res.ok) {{ out.textContent = JSON.stringify(body); return; }}
-      out.innerHTML = (body.results || []).map(r => `
+      if (!res.ok) {{
+        setStatus('検索失敗', 'err');
+        out.textContent = JSON.stringify(body);
+        return;
+      }}
+      const hits = body.results || [];
+      setStatus(`検索結果 ${{hits.length}} 件`, 'ok');
+      out.innerHTML = '<h3>Search</h3>' + (hits.map(r => `
         <div class="hit">
+          <img src="${{r.thumbnail_url}}" alt="" />
           <div>
-            <img src="${{r.thumbnail_url}}" alt="" />
-          </div>
-          <div>
-            <div><a href="/api/assets/${{encodeURI(r.asset_id)}}">${{r.asset_id}}</a></div>
+            <div><a href="/api/assets/${{encodeURI(r.asset_id)}}">${{r.display_name || r.asset_id}}</a></div>
             <div class="muted">${{r.media_type}} · score ${{r.score.toFixed(4)}}</div>
-            <div class="muted">tags: ${{(r.tags || []).join(', ') || '—'}}</div>
-            ${{r.best_frame_key
-              ? `<div class="muted">bestFrame: ${{r.best_frame_key}}</div>`
-              : ''}}
           </div>
-        </div>`).join('') || '<p class="muted">no results</p>';
+          <div></div>
+        </div>`).join('') || '<p class="muted">no results</p>');
     }};
+    refreshAll();
   </script>
 </body>
 </html>
@@ -108,21 +332,31 @@ class SearchHitOut(BaseModel):
     tags: list[str] = Field(default_factory=list)
     best_frame_key: str | None = None
     thumbnail_url: str
+    display_name: str = ""
+    product_id: str | None = None
+    match_kinds: list[str] = Field(
+        default_factory=list,
+        description="semantic | text | visual (bare image KNN is visual similar, not SKU)",
+    )
 
 
 class SearchResponse(BaseModel):
     results: list[SearchHitOut]
+    mode: str = Field(
+        default="text",
+        description="text | visual_similar (image search without SKU claim)",
+    )
 
 
-class ImportWarningOut(BaseModel):
-    path: str
-    reason: str
-
-
-class ImportResponse(BaseModel):
-    imported: list[str]
-    updated: list[str]
-    skipped: list[ImportWarningOut]
+class TextSearchIn(BaseModel):
+    q: str
+    media_type: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    top_k: int = Field(default=5, ge=1, le=50)
+    product_id: str | None = Field(
+        default=None,
+        description="When set, exact SKU filter on asset.product_id",
+    )
 
 
 class AssetDetailOut(BaseModel):
@@ -136,16 +370,169 @@ class AssetDetailOut(BaseModel):
     tags: list[str] = Field(default_factory=list)
     description: str = ""
     media_url: str
+    display_name: str = ""
+    folder_id: str | None = None
+    product_id: str | None = None
+
+
+class FolderOut(BaseModel):
+    folder_id: str
+    name: str
+    parent_id: str | None = None
+
+
+class FolderCreateIn(BaseModel):
+    name: str
+    parent_id: str | None = None
+
+
+class FolderListOut(BaseModel):
+    folders: list[FolderOut]
+
+
+class LibraryAssetOut(BaseModel):
+    asset_id: str
+    display_name: str
+    media_type: str
+    folder_id: str | None = None
+    thumbnail_url: str
+    product_id: str | None = None
+
+
+class LibraryAssetsOut(BaseModel):
+    assets: list[LibraryAssetOut]
+
+
+class AssetPatchIn(BaseModel):
+    display_name: str | None = None
+    folder_id: str | None = None
+    product_id: str | None = None
+
+
+class ImportWarningOut(BaseModel):
+    path: str
+    reason: str
+
+
+class ImportResponse(BaseModel):
+    imported: list[str]
+    updated: list[str]
+    skipped: list[ImportWarningOut]
+
+
+class ImportJobOut(BaseModel):
+    job_id: str
+    status: str
+    holder: str
+    processed: int = 0
+    total: int | None = None
+    imported: list[str] = Field(default_factory=list)
+    updated: list[str] = Field(default_factory=list)
+    skipped: list[ImportWarningOut] = Field(default_factory=list)
+    error: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class StatsOut(BaseModel):
+    assets: int
+    images: int
+    videos: int
+    latest_job: ImportJobOut | None = None
+
+
+class UploadOut(BaseModel):
+    asset: LibraryAssetOut | None = None
+    assets: list[LibraryAssetOut] = Field(default_factory=list)
+    job: ImportJobOut | None = None
+
+
+def _job_out(job) -> ImportJobOut:
+    return ImportJobOut(
+        job_id=job.job_id,
+        status=job.status.value if isinstance(job.status, ImportJobStatus) else str(job.status),
+        holder=job.holder,
+        processed=job.processed,
+        total=job.total,
+        imported=list(job.imported),
+        updated=list(job.updated),
+        skipped=[ImportWarningOut(path=s.path, reason=s.reason) for s in job.skipped],
+        error=job.error,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+    )
+
+
+def _parse_media_type(media_type: str | None) -> MediaType | None:
+    if not media_type:
+        return None
+    try:
+        return MediaType(media_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid media_type") from exc
+
+
+def _hits_out(hits) -> list[SearchHitOut]:
+    results: list[SearchHitOut] = []
+    for h in hits:
+        best_key = h.best_frame.frame_key if h.best_frame else None
+        mt_s = h.asset.media_type.value
+        results.append(
+            SearchHitOut(
+                asset_id=h.asset.asset_id,
+                media_type=mt_s,
+                score=h.score,
+                tags=list(h.asset.tags),
+                best_frame_key=best_key,
+                thumbnail_url=thumbnail_url_for(
+                    media_type=mt_s,
+                    asset_id=h.asset.asset_id,
+                    best_frame_key=best_key,
+                ),
+                display_name=h.asset.display_name or h.asset.asset_id,
+                product_id=h.asset.product_id,
+                match_kinds=list(h.match_kinds),
+            )
+        )
+    return results
+
+
+def _run_text_search(
+    search: SearchMediaAssets,
+    *,
+    q: str,
+    media_type: str | None,
+    tags: list[str],
+    top_k: int,
+    product_id: str | None,
+) -> SearchResponse:
+    mt = _parse_media_type(media_type)
+    try:
+        hits = search.execute(
+            SearchQuery(
+                q=q,
+                media_type=mt,
+                tags=tuple(tags),
+                top_k=top_k,
+                product_id=product_id or None,
+            )
+        )
+    except EmptyQueryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return SearchResponse(results=_hits_out(hits), mode="text")
 
 
 def create_app(
     *,
     search: SearchMediaAssets,
     importer: ImportDirectory | None = None,
+    import_jobs: ImportJobPort | None = None,
+    library: LibraryService | None = None,
     metadata: MetadataRepositoryPort | None = None,
     media_root: Path | None = None,
     media_storage: MediaStoragePort | None = None,
     frame_root: Path | None = None,
+    frame_store: FrameStorePort | None = None,
     on_after_import: Callable[[], None] | None = None,
     embedder_mode: str = "unknown",
     embedder_id: str = "unknown",
@@ -153,6 +540,11 @@ def create_app(
     storage = media_storage
     if storage is None and media_root is not None:
         storage = LocalMediaStorage(media_root)
+
+    if frame_store is None and frame_root is not None:
+        from media_search.adapters.local_frame_store import LocalFrameStore
+
+        frame_store = LocalFrameStore(frame_root)
 
     app = FastAPI(title="media-search", version="0.1.0")
 
@@ -168,70 +560,118 @@ def create_app(
             "embedder_id": embedder_id,
         }
 
-    @app.get("/api/search", response_model=SearchResponse)
+    @app.get(
+        "/api/search",
+        response_model=SearchResponse,
+        summary="Text search (semantic + display_name/tags)",
+    )
     def api_search(
         q: str = Query(default=""),
         media_type: str | None = None,
         tags: list[str] = Query(default=[]),
         top_k: int = Query(default=5, ge=1, le=50),
+        product_id: str | None = Query(
+            default=None,
+            description="Exact SKU filter when set",
+        ),
     ) -> SearchResponse:
-        mt: MediaType | None = None
-        if media_type:
-            try:
-                mt = MediaType(media_type)
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail="invalid media_type") from exc
+        return _run_text_search(
+            search,
+            q=q,
+            media_type=media_type,
+            tags=tags,
+            top_k=top_k,
+            product_id=product_id,
+        )
+
+    @app.post(
+        "/api/search",
+        response_model=SearchResponse,
+        summary="Text search (JSON body)",
+    )
+    def api_search_post(body: TextSearchIn) -> SearchResponse:
+        return _run_text_search(
+            search,
+            q=body.q,
+            media_type=body.media_type,
+            tags=body.tags,
+            top_k=body.top_k,
+            product_id=body.product_id,
+        )
+
+    @app.post(
+        "/api/search/by-image",
+        response_model=SearchResponse,
+        summary="Visual-similar image search (not SKU unless product_id filter)",
+    )
+    async def api_search_by_image(
+        file: UploadFile = File(...),
+        media_type: str | None = Form(default=None),
+        tags: list[str] = Form(default=[]),
+        top_k: int = Form(default=5),
+        product_id: str | None = Form(default=None),
+    ) -> SearchResponse:
+        if top_k < 1 or top_k > 50:
+            raise HTTPException(status_code=400, detail="top_k must be 1..50")
+        mt = _parse_media_type(media_type)
+        data = await file.read()
         try:
-            hits = search.execute(
-                SearchQuery(q=q, media_type=mt, tags=tuple(tags), top_k=top_k)
-            )
-        except EmptyQueryError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        results: list[SearchHitOut] = []
-        for h in hits:
-            best_key = h.best_frame.frame_key if h.best_frame else None
-            mt = h.asset.media_type.value
-            results.append(
-                SearchHitOut(
-                    asset_id=h.asset.asset_id,
+            hits = search.execute_image(
+                ImageSearchQuery(
+                    image_bytes=data,
                     media_type=mt,
-                    score=h.score,
-                    tags=list(h.asset.tags),
-                    best_frame_key=best_key,
-                    thumbnail_url=thumbnail_url_for(
-                        media_type=mt,
-                        asset_id=h.asset.asset_id,
-                        best_frame_key=best_key,
-                    ),
+                    tags=tuple(tags),
+                    top_k=top_k,
+                    product_id=product_id or None,
                 )
             )
-        return SearchResponse(results=results)
+        except EmptyImageError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return SearchResponse(results=_hits_out(hits), mode="visual_similar")
 
-    @app.post("/api/import", response_model=ImportResponse)
+    @app.post("/api/import")
     def api_import(
         path: str = Query(
             default="",
-            description="Local import directory; empty uses configured media storage",
+            description="Local import directory override (sync). Empty → async job",
         ),
-    ) -> ImportResponse:
-        if importer is None:
-            raise HTTPException(status_code=501, detail="import not configured")
-        try:
-            if path.strip():
-                from media_search.adapters.local_media_storage import LocalMediaStorage
-
+    ):
+        if path.strip():
+            if importer is None:
+                raise HTTPException(status_code=501, detail="import not configured")
+            try:
                 root = Path(path)
                 if not root.is_dir():
                     raise FileNotFoundError(f"import root not found: {root}")
                 summary = importer.execute_storage(LocalMediaStorage(root))
-            else:
-                if storage is None:
-                    raise HTTPException(
-                        status_code=400, detail="path required when media storage unset"
-                    )
-                summary = importer.execute_storage(storage)
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            if on_after_import is not None:
+                on_after_import()
+            return ImportResponse(
+                imported=summary.imported,
+                updated=summary.updated,
+                skipped=[
+                    ImportWarningOut(path=s.path, reason=s.reason) for s in summary.skipped
+                ],
+            )
+
+        if import_jobs is not None:
+            try:
+                job = import_jobs.enqueue()
+            except ImportLockBusy as exc:
+                raise HTTPException(
+                    status_code=409, detail={"error": "import_busy", "holder": exc.holder}
+                ) from exc
+            return _job_out(job)
+
+        if importer is None:
+            raise HTTPException(status_code=501, detail="import not configured")
+        if storage is None:
+            raise HTTPException(
+                status_code=400, detail="path required when media storage unset"
+            )
+        summary = importer.execute_storage(storage)
         if on_after_import is not None:
             on_after_import()
         return ImportResponse(
@@ -241,6 +681,188 @@ def create_app(
                 ImportWarningOut(path=s.path, reason=s.reason) for s in summary.skipped
             ],
         )
+
+    @app.get("/api/import/jobs/{job_id}", response_model=ImportJobOut)
+    def api_import_job(job_id: str) -> ImportJobOut:
+        if import_jobs is None:
+            raise HTTPException(status_code=501, detail="import jobs not configured")
+        job = import_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return _job_out(job)
+
+    @app.get("/api/import/status", response_model=ImportJobOut)
+    def api_import_status() -> ImportJobOut:
+        if import_jobs is None:
+            raise HTTPException(status_code=501, detail="import jobs not configured")
+        job = import_jobs.latest()
+        if job is None:
+            raise HTTPException(status_code=404, detail="no import jobs")
+        return _job_out(job)
+
+    @app.get("/api/stats", response_model=StatsOut)
+    def api_stats() -> StatsOut:
+        if metadata is None:
+            raise HTTPException(status_code=501, detail="metadata not configured")
+        assets = metadata.list_all()
+        images = sum(1 for a in assets if a.media_type == MediaType.IMAGE)
+        videos = sum(1 for a in assets if a.media_type == MediaType.VIDEO)
+        latest = import_jobs.latest() if import_jobs is not None else None
+        return StatsOut(
+            assets=len(assets),
+            images=images,
+            videos=videos,
+            latest_job=_job_out(latest) if latest else None,
+        )
+
+    def _library_asset_out(asset) -> LibraryAssetOut:
+        return LibraryAssetOut(
+            asset_id=asset.asset_id,
+            display_name=asset.display_name or asset.asset_id,
+            media_type=asset.media_type.value,
+            folder_id=asset.folder_id,
+            thumbnail_url=thumbnail_url_for(
+                media_type=asset.media_type.value,
+                asset_id=asset.asset_id,
+                best_frame_key=None,
+            ),
+            product_id=asset.product_id,
+        )
+
+    @app.get("/api/library/folders", response_model=FolderListOut)
+    def api_list_folders(
+        parent_id: str | None = None,
+        list_all: bool = Query(default=False, alias="all"),
+    ) -> FolderListOut:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        folders = library.list_all_folders() if list_all else library.list_folders(parent_id)
+        return FolderListOut(
+            folders=[
+                FolderOut(folder_id=f.folder_id, name=f.name, parent_id=f.parent_id)
+                for f in folders
+            ]
+        )
+
+    @app.post("/api/library/folders", response_model=FolderOut)
+    def api_create_folder(body: FolderCreateIn) -> FolderOut:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        try:
+            folder = library.create_folder(name=body.name, parent_id=body.parent_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return FolderOut(
+            folder_id=folder.folder_id, name=folder.name, parent_id=folder.parent_id
+        )
+
+    @app.delete("/api/library/folders/{folder_id}")
+    def api_delete_folder(folder_id: str) -> dict[str, str]:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        try:
+            library.delete_folder(folder_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"status": "deleted"}
+
+    @app.get("/api/library/assets", response_model=LibraryAssetsOut)
+    def api_library_assets(
+        folder_id: str | None = Query(default=None),
+    ) -> LibraryAssetsOut:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        # Explicit empty string means root (null folder).
+        fid: str | None
+        if folder_id is None:
+            fid = None
+        elif folder_id == "":
+            fid = None
+        else:
+            fid = folder_id
+        assets = library.list_assets(fid)
+        return LibraryAssetsOut(assets=[_library_asset_out(a) for a in assets])
+
+    @app.post("/api/library/upload", response_model=UploadOut)
+    async def api_library_upload(
+        files: list[UploadFile] | None = File(default=None),
+        file: UploadFile | None = File(default=None),
+        folder_id: str | None = Form(default=None),
+    ) -> UploadOut:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        uploads: list[UploadFile] = list(files or [])
+        if file is not None:
+            uploads.append(file)
+        if not uploads:
+            raise HTTPException(status_code=400, detail="no files")
+        try:
+            items: list[tuple[str, bytes, str | None]] = []
+            for uf in uploads:
+                data = await uf.read()
+                items.append((uf.filename or "upload.bin", data, uf.content_type))
+            if len(items) == 1:
+                asset, job = library.upload(
+                    filename=items[0][0],
+                    data=items[0][1],
+                    folder_id=folder_id or None,
+                    content_type=items[0][2],
+                )
+                out_asset = _library_asset_out(asset)
+                return UploadOut(
+                    asset=out_asset,
+                    assets=[out_asset],
+                    job=_job_out(job) if job else None,
+                )
+            assets, job = library.upload_many(
+                items=items, folder_id=folder_id or None
+            )
+            outs = [_library_asset_out(a) for a in assets]
+            return UploadOut(
+                asset=outs[0] if outs else None,
+                assets=outs,
+                job=_job_out(job) if job else None,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ImportLockBusy as exc:
+            raise HTTPException(
+                status_code=409, detail={"error": "import_busy", "holder": exc.holder}
+            ) from exc
+
+    @app.patch("/api/library/assets/{asset_id:path}", response_model=LibraryAssetOut)
+    def api_patch_asset(asset_id: str, body: AssetPatchIn) -> LibraryAssetOut:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        try:
+            asset = None
+            if body.display_name is not None:
+                asset = library.rename(asset_id, body.display_name)
+            if "folder_id" in body.model_fields_set:
+                asset = library.move(asset_id, body.folder_id)
+            if "product_id" in body.model_fields_set:
+                asset = library.set_product_id(asset_id, body.product_id)
+            if asset is None:
+                raise HTTPException(status_code=400, detail="no changes")
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _library_asset_out(asset)
+
+    @app.delete("/api/library/assets/{asset_id:path}")
+    def api_delete_asset(asset_id: str) -> dict[str, str]:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        try:
+            library.delete_asset(asset_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {"status": "deleted"}
 
     @app.get("/api/assets/{asset_id:path}", response_model=AssetDetailOut)
     def api_asset_detail(asset_id: str) -> AssetDetailOut:
@@ -260,6 +882,9 @@ def create_app(
             tags=list(asset.tags),
             description=asset.description,
             media_url=f"/media/{asset.asset_id}",
+            display_name=asset.display_name or asset.asset_id,
+            folder_id=asset.folder_id,
+            product_id=asset.product_id,
         )
 
     @app.get("/media/{asset_id:path}")
@@ -271,28 +896,24 @@ def create_app(
             raise HTTPException(status_code=404, detail="asset not found")
         if not storage.exists(asset_id):
             raise HTTPException(status_code=404, detail="media file missing")
-        try:
-            # Reject traversal-style keys before streaming.
-            parts = [p for p in asset_id.replace("\\", "/").split("/") if p]
-            if any(p == ".." for p in parts):
-                raise HTTPException(status_code=400, detail="invalid asset path")
-        except HTTPException:
-            raise
+        parts = [p for p in asset_id.replace("\\", "/").split("/") if p]
+        if any(p == ".." for p in parts):
+            raise HTTPException(status_code=400, detail="invalid asset path")
         stream = storage.open_stream(asset_id)
         return StreamingResponse(stream, media_type=asset.mime_type)
 
     @app.get("/thumbnails/{frame_key:path}")
-    def thumbnail_file(frame_key: str) -> FileResponse:
-        if frame_root is None:
+    def thumbnail_file(frame_key: str):
+        if frame_store is None:
             raise HTTPException(status_code=501, detail="thumbnails not configured")
-        root = frame_root.resolve()
-        path = frame_cache_path(root, frame_key).resolve()
         try:
-            path.relative_to(root)
+            stream = frame_store.open_stream(frame_key)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="thumbnail missing") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="invalid frame key") from exc
-        if not path.is_file():
-            raise HTTPException(status_code=404, detail="thumbnail missing")
-        return FileResponse(path, media_type="image/jpeg")
+        data = stream.read()
+        stream.close()
+        return Response(content=data, media_type="image/jpeg")
 
     return app

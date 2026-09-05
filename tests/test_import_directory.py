@@ -39,19 +39,38 @@ def test_import_skips_unsupported_and_imports_png(tmp_path: Path):
     assert meta.get("ok.png") is not None
 
 
-def test_reimport_is_upsert(tmp_path: Path):
+def test_reimport_skips_unchanged(tmp_path: Path):
     incoming = tmp_path / "incoming"
     _write_png(incoming / "a.png", (0, 255, 0))
     embedder = FakeEmbedder()
     meta = InMemoryMetadataRepository()
     vectors = InMemoryVectorSearch()
-    importer = ImportDirectory(embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe())
+    importer = ImportDirectory(
+        embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe()
+    )
     first = importer.execute_storage(LocalMediaStorage(incoming))
     second = importer.execute_storage(LocalMediaStorage(incoming))
     assert first.imported == ["a.png"]
-    assert second.updated == ["a.png"]
     assert second.imported == []
+    assert second.updated == []
+    assert any(s.path == "a.png" and s.reason == "unchanged" for s in second.skipped)
     assert len(meta.list_all()) == 1
+
+
+def test_reimport_updates_when_size_changes(tmp_path: Path):
+    incoming = tmp_path / "incoming"
+    path = incoming / "a.png"
+    _write_png(path, (0, 255, 0))
+    embedder = FakeEmbedder()
+    meta = InMemoryMetadataRepository()
+    vectors = InMemoryVectorSearch()
+    importer = ImportDirectory(
+        embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe()
+    )
+    importer.execute_storage(LocalMediaStorage(incoming))
+    Image.new("RGB", (64, 64), (1, 2, 3)).save(path)
+    second = importer.execute_storage(LocalMediaStorage(incoming))
+    assert second.updated == ["a.png"]
 
 
 def test_sidecar_tags(tmp_path: Path):

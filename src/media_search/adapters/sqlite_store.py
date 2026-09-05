@@ -28,7 +28,31 @@ class SqliteMetadataRepository:
                   height INTEGER,
                   duration_seconds REAL,
                   tags_json TEXT NOT NULL,
-                  description TEXT NOT NULL
+                  description TEXT NOT NULL,
+                  display_name TEXT NOT NULL DEFAULT '',
+                  folder_id TEXT,
+                  product_id TEXT
+                )
+                """
+            )
+            cols = {
+                r[1]
+                for r in self._conn.execute("PRAGMA table_info(assets)").fetchall()
+            }
+            if "display_name" not in cols:
+                self._conn.execute(
+                    "ALTER TABLE assets ADD COLUMN display_name TEXT NOT NULL DEFAULT ''"
+                )
+            if "folder_id" not in cols:
+                self._conn.execute("ALTER TABLE assets ADD COLUMN folder_id TEXT")
+            if "product_id" not in cols:
+                self._conn.execute("ALTER TABLE assets ADD COLUMN product_id TEXT")
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS folders (
+                  folder_id TEXT PRIMARY KEY,
+                  name TEXT NOT NULL,
+                  parent_id TEXT
                 )
                 """
             )
@@ -40,8 +64,9 @@ class SqliteMetadataRepository:
                 """
                 INSERT INTO assets(
                   asset_id, media_type, mime_type, size_bytes, width, height,
-                  duration_seconds, tags_json, description
-                ) VALUES (?,?,?,?,?,?,?,?,?)
+                  duration_seconds, tags_json, description, display_name, folder_id,
+                  product_id
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(asset_id) DO UPDATE SET
                   media_type=excluded.media_type,
                   mime_type=excluded.mime_type,
@@ -50,7 +75,10 @@ class SqliteMetadataRepository:
                   height=excluded.height,
                   duration_seconds=excluded.duration_seconds,
                   tags_json=excluded.tags_json,
-                  description=excluded.description
+                  description=excluded.description,
+                  display_name=excluded.display_name,
+                  folder_id=excluded.folder_id,
+                  product_id=excluded.product_id
                 """,
                 (
                     asset.asset_id,
@@ -62,6 +90,9 @@ class SqliteMetadataRepository:
                     asset.duration_seconds,
                     json.dumps(asset.tags),
                     asset.description,
+                    asset.display_name or asset.asset_id,
+                    asset.folder_id,
+                    asset.product_id,
                 ),
             )
             self._conn.commit()
@@ -82,8 +113,121 @@ class SqliteMetadataRepository:
             ).fetchall()
         return [_row_to_asset(r) for r in rows]
 
+    def list_by_folder(self, folder_id: Optional[str]) -> list[MediaAsset]:
+        with self._lock:
+            if folder_id is None:
+                rows = self._conn.execute(
+                    "SELECT * FROM assets WHERE folder_id IS NULL ORDER BY display_name, asset_id"
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM assets WHERE folder_id = ? ORDER BY display_name, asset_id",
+                    (folder_id,),
+                ).fetchall()
+        return [_row_to_asset(r) for r in rows]
+
+    def delete(self, asset_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM assets WHERE asset_id = ?", (asset_id,))
+            self._conn.commit()
+
+
+class SqliteFolderRepository:
+    def __init__(self, conn: sqlite3.Connection, *, lock: threading.Lock | None = None) -> None:
+        self._conn = conn
+        self._lock = lock or threading.Lock()
+        with self._lock:
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS folders (
+                  folder_id TEXT PRIMARY KEY,
+                  name TEXT NOT NULL,
+                  parent_id TEXT
+                )
+                """
+            )
+            self._conn.commit()
+
+    def upsert(self, folder) -> None:
+        from media_search.ports.folder import Folder
+
+        assert isinstance(folder, Folder)
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO folders(folder_id, name, parent_id) VALUES (?,?,?)
+                ON CONFLICT(folder_id) DO UPDATE SET
+                  name=excluded.name,
+                  parent_id=excluded.parent_id
+                """,
+                (folder.folder_id, folder.name, folder.parent_id),
+            )
+            self._conn.commit()
+
+    def get(self, folder_id: str):
+        from media_search.ports.folder import Folder
+
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM folders WHERE folder_id = ?", (folder_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return Folder(
+            folder_id=row["folder_id"], name=row["name"], parent_id=row["parent_id"]
+        )
+
+    def list_children(self, parent_id: Optional[str] = None):
+        from media_search.ports.folder import Folder
+
+        with self._lock:
+            if parent_id is None:
+                rows = self._conn.execute(
+                    "SELECT * FROM folders WHERE parent_id IS NULL ORDER BY name"
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM folders WHERE parent_id = ? ORDER BY name",
+                    (parent_id,),
+                ).fetchall()
+        return [
+            Folder(folder_id=r["folder_id"], name=r["name"], parent_id=r["parent_id"])
+            for r in rows
+        ]
+
+    def list_all(self):
+        from media_search.ports.folder import Folder
+
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM folders ORDER BY name"
+            ).fetchall()
+        return [
+            Folder(folder_id=r["folder_id"], name=r["name"], parent_id=r["parent_id"])
+            for r in rows
+        ]
+
+    def delete(self, folder_id: str) -> None:
+        with self._lock:
+            child = self._conn.execute(
+                "SELECT 1 FROM folders WHERE parent_id = ? LIMIT 1", (folder_id,)
+            ).fetchone()
+            if child:
+                raise ValueError("folder not empty (has child folders)")
+            asset = self._conn.execute(
+                "SELECT 1 FROM assets WHERE folder_id = ? LIMIT 1", (folder_id,)
+            ).fetchone()
+            if asset:
+                raise ValueError("folder not empty (has assets)")
+            self._conn.execute("DELETE FROM folders WHERE folder_id = ?", (folder_id,))
+            self._conn.commit()
+
 
 def _row_to_asset(row: sqlite3.Row) -> MediaAsset:
+    keys = row.keys()
+    display = row["display_name"] if "display_name" in keys else ""
+    folder_id = row["folder_id"] if "folder_id" in keys else None
+    product_id = row["product_id"] if "product_id" in keys else None
     return MediaAsset(
         asset_id=row["asset_id"],
         media_type=MediaType(row["media_type"]),
@@ -94,6 +238,9 @@ def _row_to_asset(row: sqlite3.Row) -> MediaAsset:
         duration_seconds=row["duration_seconds"],
         tags=list(json.loads(row["tags_json"] or "[]")),
         description=row["description"] or "",
+        display_name=display or row["asset_id"],
+        folder_id=folder_id,
+        product_id=product_id,
     )
 
 

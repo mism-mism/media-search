@@ -17,6 +17,29 @@ stack to **Cloud Run + GCS** with Terraform + GitHub Actions.
 
 Vertex embeddings / Vector Search remain **out of scope**.
 
+## Scale ingest (005)
+
+| Piece | Choice |
+|-------|--------|
+| Heavy Import | Cloud Run **Job** `media-search-import` (UI enqueues) |
+| Single writer | GCS lock object `state/import.lock.json` |
+| Frame thumbs | GCS prefix `frames/` (survive scale-to-zero) |
+| Job status | GCS `state/import-jobs/*.json` |
+| Embedder | OpenCLIP (unchanged) |
+
+### Operator flow (~10k)
+
+1. Upload media to `gs://$BUCKET/incoming/` (images + videos).
+2. Open the IAP UI → **Import** (or `POST /api/import` with empty path).
+3. Poll `/api/import/jobs/{id}` / UI status until `succeeded`.
+4. Search as usual; video thumbs come from GCS frames.
+5. Overlapping Import → **409** until the lock clears.
+
+Local/dev without Job: omit `CLOUD_RUN_IMPORT_JOB` — Import runs on a
+background thread (set `IMPORT_SYNC=1` for inline tests).
+
+Worker entrypoint: `python -m media_search.worker_import` (Job command).
+
 ## Prerequisites
 
 1. GCP project with billing
@@ -43,11 +66,22 @@ Cloud Run (project IAM). Bind WIF per Google’s GitHub Actions docs.
 
 ## 2. Dispatch CD
 
-Actions → **deploy-gcp** → Run workflow → enter `project_id` / `region` / tag.
+Everyday local rebuild (amd64 → Artifact Registry → Cloud Run + Import Job):
+
+```bash
+make deploy
+# optional tag: make deploy IMAGE_TAG=005-006
+```
+
+Or GitHub Actions → **deploy-gcp** → Run workflow → enter `project_id` / `region` / tag.
 
 The workflow builds with `INSTALL_SEMANTIC=1`, `INSTALL_GCP=1`, and
 `PREWARM_OPENCLIP=1` (CPU torch wheels — CUDA wheels OOM on Cloud Run), pushes
 to `media-search-repo`, and deploys Cloud Run env for GCS.
+
+Dockerfile is **multi-stage** (`deps` → `models` → `runtime`): torch/OpenCLIP
+install and HF weight bake are cached unless `pyproject.toml` / embedder code
+changes, so app-only edits rebuild much faster.
 
 ## 3. Upload media + import
 

@@ -41,6 +41,23 @@ class LocalMediaStorage:
     def read_bytes(self, key: str) -> bytes:
         return self._resolve(key).read_bytes()
 
+    def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
+        del content_type
+        path = self._resolve(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    def delete(self, key: str) -> None:
+        try:
+            path = self._resolve(key)
+        except ValueError:
+            return
+        if path.is_file():
+            path.unlink()
+        meta = path.parent / f"{path.name}.meta.json"
+        if meta.is_file():
+            meta.unlink()
+
     def open_stream(self, key: str) -> BinaryIO:
         return self._resolve(key).open("rb")
 

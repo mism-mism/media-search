@@ -17,6 +17,7 @@ from media_search.domain.media_asset import MediaAsset, MediaType
 class SidecarMeta:
     tags: list[str]
     description: str
+    product_id: Optional[str] = None
 
 
 def load_sidecar(path: Path) -> SidecarMeta:
@@ -29,7 +30,15 @@ def load_sidecar(path: Path) -> SidecarMeta:
     if not isinstance(tags, list):
         tags = []
     desc = data.get("description") or ""
-    return SidecarMeta(tags=[str(t) for t in tags], description=str(desc))
+    raw_pid = data.get("product_id")
+    product_id = str(raw_pid).strip() if raw_pid else None
+    if product_id == "":
+        product_id = None
+    return SidecarMeta(
+        tags=[str(t) for t in tags],
+        description=str(desc),
+        product_id=product_id,
+    )
 
 
 def probe_image(path: Path) -> tuple[str, int, Optional[int], Optional[int]]:
@@ -83,6 +92,7 @@ def build_asset(path: Path, *, import_root: Path) -> MediaAsset:
             height=height,
             tags=list(sidecar.tags),
             description=sidecar.description,
+            product_id=sidecar.product_id,
         )
     mime, size, width, height, duration = probe_video(path)
     return MediaAsset(
@@ -95,6 +105,7 @@ def build_asset(path: Path, *, import_root: Path) -> MediaAsset:
         duration_seconds=duration,
         tags=list(sidecar.tags),
         description=sidecar.description,
+        product_id=sidecar.product_id,
     )
 
 

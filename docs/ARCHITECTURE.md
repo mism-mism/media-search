@@ -49,8 +49,10 @@ design—not before:
 | Application runtime | Local process / thin container | **Cloud Run** |
 | Media storage | Filesystem under import/data roots | **GCS** |
 | Metadata persistence | SQLite via port | **sqlite** (durable strategy per 002 plan) |
-| Search / vector index | sqlite-vec | **sqlite-vec** (same; Vertex deferred) |
-| Embedding / AI | FakeEmbedder + Real Local OpenCLIP | **OpenCLIP in Cloud Run** (Vertex deferred) |
+| Search / vector index | sqlite-vec | **sqlite-vec** + GCS DB sync; **single-writer** lock (005) |
+| Embedding / AI | FakeEmbedder + Real Local OpenCLIP | **OpenCLIP in Cloud Run** (Vertex deferred; 004 no-go) |
+| Heavy Import | sync local | **Cloud Run Job** enqueue from UI (005) |
+| Frame thumbnails | local work dir | **GCS `frames/`** (005; survive scale-to-zero) |
 | Media source / preview | HTTP media endpoint (local files) | HTTP media endpoint **streaming from GCS** |
 | Secrets / configuration | Local config / env | Terraform + Actions (WIF preferred) |
 | Observability | Minimal local logging | Cloud Run logs (minimal) |

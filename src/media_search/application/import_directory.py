@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from media_search.application.frame_paths import frame_cache_path
 from media_search.domain.formats import classify_path
 from media_search.domain.frames import (
     MAX_REPRESENTATIVE_FRAMES,
@@ -13,6 +13,7 @@ from media_search.domain.frames import (
 )
 from media_search.domain.media_asset import MediaType
 from media_search.ports.embedding import EmbeddingPort
+from media_search.ports.frame_store import FrameStorePort
 from media_search.ports.media_probe import MediaProbePort
 from media_search.ports.media_storage import MediaStoragePort
 from media_search.ports.search import MetadataRepositoryPort, VectorSearchPort
@@ -40,35 +41,70 @@ class ImportDirectory:
         metadata: MetadataRepositoryPort,
         media_probe: MediaProbePort,
         work_dir: Path | None = None,
+        frame_store: FrameStorePort | None = None,
     ) -> None:
         self._embedder = embedder
         self._vectors = vectors
         self._metadata = metadata
         self._media_probe = media_probe
         self._work_dir = work_dir
+        self._frame_store = frame_store
 
-    def execute_storage(self, storage: MediaStoragePort) -> ImportSummary:
+    def execute_storage(
+        self,
+        storage: MediaStoragePort,
+        *,
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> ImportSummary:
         summary = ImportSummary()
         stage = Path(self._work_dir) / "import-stage" if self._work_dir else Path(
             tempfile.mkdtemp()
         )
         own_stage = self._work_dir is None
         stage.mkdir(parents=True, exist_ok=True)
+        keys = storage.list_media_keys()
+        total = len(keys)
         try:
-            for key in storage.list_media_keys():
+            for idx, key in enumerate(keys, start=1):
                 kind = classify_path(Path(key))
                 if kind is None:
                     summary.skipped.append(
                         ImportWarning(path=key, reason="unsupported format")
                     )
+                    if on_progress is not None:
+                        on_progress(idx, total)
                     continue
                 try:
                     existed = self._metadata.get(key)
                     with storage.materialize(key, stage) as local_path:
+                        size_bytes = local_path.stat().st_size
+                        if (
+                            existed is not None
+                            and existed.size_bytes == size_bytes
+                            and classify_path(Path(key)) is not None
+                        ):
+                            # Differential: unchanged size → skip re-embed.
+                            summary.skipped.append(
+                                ImportWarning(path=key, reason="unchanged")
+                            )
+                            if on_progress is not None:
+                                on_progress(idx, total)
+                            continue
                         asset = self._media_probe.build_asset(
                             local_path, import_root=local_path.parent
                         )
                         asset = replace(asset, asset_id=key)
+                        if existed is not None:
+                            asset = replace(
+                                asset,
+                                folder_id=existed.folder_id,
+                                display_name=existed.display_name or Path(key).name,
+                                tags=existed.tags or asset.tags,
+                                description=existed.description or asset.description,
+                                product_id=existed.product_id or asset.product_id,
+                            )
+                        else:
+                            asset = replace(asset, display_name=Path(key).name)
                         self._vectors.delete_asset_frames(asset.asset_id)
                         self._index_frames(local_path, asset)
                         self._metadata.upsert(asset)
@@ -84,6 +120,8 @@ class ImportDirectory:
                     summary.skipped.append(
                         ImportWarning(path=key, reason=f"import failed: {exc}")
                     )
+                if on_progress is not None:
+                    on_progress(idx, total)
         finally:
             if own_stage:
                 shutil.rmtree(stage, ignore_errors=True)
@@ -103,38 +141,29 @@ class ImportDirectory:
 
         duration = float(asset.duration_seconds or 0.0)
         positions = [s.position for s in representative_frame_positions(duration)]
-        if self._work_dir is not None:
-            frame_root = Path(self._work_dir) / "frames"
-            frame_root.mkdir(parents=True, exist_ok=True)
-            own_tmp = False
-        else:
-            frame_root = Path(tempfile.mkdtemp())
-            own_tmp = True
-        try:
-            self._clear_frame_jpegs(frame_root, asset.asset_id)
-            for i, pos in enumerate(positions):
-                frame_key = f"{asset.asset_id}::{i}"
-                frame_path = frame_cache_path(frame_root, frame_key)
+        store = self._frame_store
+        if store is not None:
+            store.delete_prefix(asset.asset_id, max_frames=MAX_REPRESENTATIVE_FRAMES)
+        for i, pos in enumerate(positions):
+            frame_key = f"{asset.asset_id}::{i}"
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                dest = Path(tmp.name)
+            try:
                 self._media_probe.extract_frame_jpeg(
                     path,
                     position=pos,
                     duration_seconds=duration,
-                    dest=frame_path,
+                    dest=dest,
                 )
-                vec = self._embedder.embed_image(frame_path.read_bytes())
+                jpeg = dest.read_bytes()
+                if store is not None:
+                    store.put_jpeg(frame_key, jpeg)
+                vec = self._embedder.embed_image(jpeg)
                 self._vectors.upsert_frame(
                     asset_id=asset.asset_id,
                     frame_key=frame_key,
                     position=pos,
                     vector=vec.tolist(),
                 )
-        finally:
-            if own_tmp:
-                shutil.rmtree(frame_root, ignore_errors=True)
-
-    @staticmethod
-    def _clear_frame_jpegs(frame_root: Path, asset_id: str) -> None:
-        for i in range(MAX_REPRESENTATIVE_FRAMES):
-            path = frame_cache_path(frame_root, f"{asset_id}::{i}")
-            if path.is_file():
-                path.unlink()
+            finally:
+                dest.unlink(missing_ok=True)

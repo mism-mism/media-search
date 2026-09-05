@@ -25,6 +25,7 @@ dev = [
 ]
 gcp = [
   "google-cloud-storage>=2.16.0",
+  "google-cloud-run>=0.10.0",
 ]
 semantic = [
   "open-clip-torch>=2.24.0",

@@ -118,15 +118,23 @@ def test_video_search_returns_best_frame_thumbnail(tmp_path):
     embedder = FakeEmbedder()
     meta = InMemoryMetadataRepository()
     vectors = InMemoryVectorSearch()
+    from media_search.adapters.local_frame_store import LocalFrameStore
+
+    frames = LocalFrameStore(work / "frames")
     importer = ImportDirectory(
-        embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe(), work_dir=work
+        embedder=embedder,
+        vectors=vectors,
+        metadata=meta,
+        media_probe=LocalMediaProbe(),
+        work_dir=work,
+        frame_store=frames,
     )
     app = create_app(
         search=SearchMediaAssets(embedder=embedder, vectors=vectors, metadata=meta),
         importer=importer,
         metadata=meta,
         media_root=incoming,
-        frame_root=work / "frames",
+        frame_store=frames,
     )
     client = TestClient(app)
     assert client.post("/api/import", params={"path": str(incoming)}).status_code == 200

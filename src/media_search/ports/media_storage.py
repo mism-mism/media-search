@@ -15,6 +15,12 @@ class MediaStoragePort(Protocol):
 
     def read_bytes(self, key: str) -> bytes: ...
 
+    def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
+        """Create or overwrite object at key."""
+
+    def delete(self, key: str) -> None:
+        """Remove object if present (no error if missing)."""
+
     def open_stream(self, key: str) -> BinaryIO:
         """Open a readable binary stream for key. Caller closes."""
 

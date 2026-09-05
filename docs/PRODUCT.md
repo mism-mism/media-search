@@ -44,7 +44,10 @@ Do **not** develop by deploying to GCP from day one.
 | **001** Local-first Media Asset Search Vertical Slice | Prove semantic search + filters + preview locally | completed |
 | **002** `gcp-deployment` | Cloud Run + GCS; OpenCLIP + sqlite-vec; Terraform + CD | completed |
 | **003** `iap-access` | IAP (External + Gmail allowlist) before production | completed |
-| **004+** | Vertex eval (optional) — [PR #7](https://github.com/mism-mism/media-search/pull/7) | draft |
+| **004** | Vertex embeddings eval — no-go cutover; OpenCLIP remains default | draft / PR |
+| **005** `scale-media-ingest` | ~10k image+video; team UI → Cloud Run Job; GCS thumbs; sqlite single-writer | active (implemented on branch) |
+| **006** `media-library` | Virtual folders + upload/manage + colocated search | active |
+| **007** `product-search-api` | Product name + similar-image search API (hybrid SKU) | active |
 
 Rules:
 
@@ -55,20 +58,22 @@ Rules:
 - Bootstrap prompt summary (non-SoR):
   [`docs/prompts/media-search-server-bootstrap.md`](prompts/media-search-server-bootstrap.md)
 
-## Product search contract (001)
+## Product search contract (001 + 007)
 
 ```text
-semantic search  (required query)
-  +
-metadata filters
-  - mediaType: image | video
-  - tags: AND inclusion
+text search (GET|POST /api/search)
+  semantic Top-K  +  display_name/tags substring match
+  + optional filters: mediaType, tags AND, product_id exact
+
+image search (POST /api/search/by-image)
+  visual similar (OpenCLIP image→image KNN) — not SKU by itself
+  + optional product_id exact filter = SKU-grade path
 ```
 
-No keyword/path/description substring search in 001. No filter-only browse
-(empty semantic query is invalid).
+Empty text query is invalid. Bare image search is **visual similar**; SKU-grade
+requires `product_id` metadata (hybrid D6). Auth remains IAP for 007.
 
-Vector search is a **formal product requirement** for 001, constrained to a
+Vector search is a **formal product requirement**, constrained to a
 **local / single-runtime** existing engine via adapters. Managed or distributed
 large-scale vector infrastructure is out of scope for 001.
 
