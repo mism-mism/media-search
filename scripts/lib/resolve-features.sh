@@ -42,9 +42,13 @@ list_changed_files() {
 }
 
 # Echo unique feature directory names (NNN-slug) touched under specs/
+# that still exist at HEAD. Deleted features (e.g. template dogfood after
+# ./scripts/adopt) appear in the diff but must not require a live gate.
 resolve_features_from_changed_files() {
   local f feat
   local out=""
+  local root
+  root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
   while IFS= read -r f || [[ -n "$f" ]]; do
     [[ -z "$f" ]] && continue
     case "$f" in
@@ -53,6 +57,10 @@ resolve_features_from_changed_files() {
         feat="${feat%%/*}"
         case "$feat" in
           [0-9][0-9][0-9]-*)
+            # Skip features removed from the tree (adoption / intentional delete).
+            if [[ ! -f "$root/specs/$feat/spec.md" ]]; then
+              continue
+            fi
             case " $out " in
               *" $feat "*) ;;
               *)

@@ -22,6 +22,10 @@ coverage/
 .venv/
 __pycache__/
 *.pyc
+*.egg-info/
+.pytest_cache/
+data/
+*.db
 
 # Worktrees (optional local convention)
 .worktrees/

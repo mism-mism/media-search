@@ -2,41 +2,102 @@
 
 ## What this is
 
-**agentic-engineering-template** is a portable **Project OS** for AI-assisted
-software engineering. It standardizes Spec-Driven Development, Harness
-Engineering, Agent Review, Mechanical Verification, and Human Review.
+**media-search** is a Media Asset Search server: import local image/video
+assets, extract technical metadata, embed them into a local vector index, and
+search by **semantic meaning** with simple metadata filters.
 
-This repository contains **no product application**. Adopting projects copy or
-template from it, then fill domain and stack-specific enforcers.
+Users find mixed image and video assets through one search experience, open
+asset detail, and preview the source media.
 
 ## Why it exists
 
-AI coding agents are fast and unreliable as sole judges of correctness.
-Teams need:
+Creative and production teams need to locate the right visual asset by meaning
+(“person holding a product outdoors”), not only by filename or hand-written
+tags. The first deliverable proves that value **locally**, without cloud
+credentials, then later deploys the same application core to GCP via adapters.
 
-1. Specs as source of truth
-2. A harness that records evidence and context safely
-3. Deterministic verification as the completion interface
-4. Independent review separated from implementation
-5. Human ownership of what/why/constraints/acceptance
+## Users
 
-## Non-goals
+- Local single operator / developer evaluating the vertical slice (v0 / 001)
+- Later: teams deploying the same product capability on GCP (002+)
 
-- Shipping a sample business app
-- Locking adopters to one language, cloud, or AI vendor
-- Fully automating multi-agent orchestration in v0
-- Replacing an individual's personal Agent OS
+## Deployment posture
 
-## Adoption sketch
+| Stage | Target |
+|-------|--------|
+| Development / Feature 001 | Local-first (no GCP required) |
+| Reproducible runtime (part of 001) | Thin container for the local slice |
+| Production | **Google Cloud Platform (GCP)** — vendor fixed; services undecided |
 
-1. GitHub **Use this template** → clone.
-2. Run `./scripts/adopt` (strips template dogfood; see [`ADOPTION.md`](ADOPTION.md)).
-3. Fill `PRODUCT` / `DOMAIN` / `GLOSSARY`; configure GitHub required `verify` check.
-4. Configure architecture/code-quality enforcers when the stack is known.
-5. `./scripts/new-feature <slug>` starting at `001`.
+Development order:
 
-## Success (v0)
+```text
+Local → Container / reproducible runtime → GCP deployment
+```
 
-A new project can run Spec → Plan → Implement → Verify → Review on day one
-without inventing process. See repository README for executable acceptance
-criteria.
+Do **not** develop by deploying to GCP from day one.
+
+## Feature roadmap (product boundary)
+
+| Feature | Intent |
+|---------|--------|
+| **001** Local-first Media Asset Search Vertical Slice | Prove semantic search + filters + preview locally; converge Inner/Outer |
+| **002** `gcp-deployment` | Swap Local infrastructure adapters for GCP adapters; meet the same Product AC where possible |
+
+**002 candidate note (not a selection):** Vertex AI Vector Search and/or Vertex
+multimodal embeddings may be evaluated after 001 converges. They are **not**
+used in 001.
+
+Rules:
+
+- Do **not** start concrete GCP service selection for 002 until 001 has
+  converged.
+- Do **not** create `specs/002-gcp-deployment/` until 001 is ready to hand off.
+- Bootstrap prompt summary (non-SoR):
+  [`docs/prompts/media-search-server-bootstrap.md`](prompts/media-search-server-bootstrap.md)
+
+## Product search contract (001)
+
+```text
+semantic search  (required query)
+  +
+metadata filters
+  - mediaType: image | video
+  - tags: AND inclusion
+```
+
+No keyword/path/description substring search in 001. No filter-only browse
+(empty semantic query is invalid).
+
+Vector search is a **formal product requirement** for 001, constrained to a
+**local / single-runtime** existing engine via adapters. Managed or distributed
+large-scale vector infrastructure is out of scope for 001.
+
+## Non-goals (near-term)
+
+- Microservices, Kubernetes, complex IaC, Pub/Sub, distributed job platforms
+  introduced “because GCP later”
+- Building a custom ANN / vector-DB engine (build the **product capability** and
+  ports; reuse an existing local engine as an adapter)
+- AI caption / tag generation in 001 (embedding quality must not be conflated
+  with caption quality)
+- Auth / multi-user in 001
+- Fully offline reproducibility (model download may require network once)
+
+## Success (001)
+
+With no GCP credentials:
+
+1. Import JPEG/PNG/MP4(H.264) from a designated directory
+2. Index with real local embeddings
+3. Semantic query + mediaType/tags filters returns mixed MediaAsset results
+4. Detail + HTTP preview of source media
+5. Deterministic verify + **required** semantic-real gate + full-profile reviews
+   converge
+
+## Notes
+
+- Docs (`PRODUCT` / `ARCHITECTURE` / feature specs) are Source of Truth.
+- Agent bootstrap prompts are summaries only.
+- Runtime language/framework is decided in Architecture (not in this file).
+- Vector engine product name is chosen in 001 `plan.md` after Domain/Ports.

@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+from typing import Optional, Sequence
+
+import numpy as np
+
+from media_search.domain.media_asset import MediaAsset
+
+
+class InMemoryMetadataRepository:
+    def __init__(self) -> None:
+        self._items: dict[str, MediaAsset] = {}
+
+    def upsert(self, asset: MediaAsset) -> None:
+        self._items[asset.asset_id] = asset
+
+    def get(self, asset_id: str) -> Optional[MediaAsset]:
+        return self._items.get(asset_id)
+
+    def list_all(self) -> list[MediaAsset]:
+        return list(self._items.values())
+
+
+class InMemoryVectorSearch:
+    """Exact cosine over stored frame vectors (001-scale Fake/Local stand-in)."""
+
+    def __init__(self) -> None:
+        self._frames: dict[str, tuple[str, float, np.ndarray]] = {}
+        # frame_key -> (asset_id, position, vector)
+
+    def upsert_frame(
+        self,
+        *,
+        asset_id: str,
+        frame_key: str,
+        position: float,
+        vector: Sequence[float],
+    ) -> None:
+        vec = np.asarray(vector, dtype=float)
+        norm = np.linalg.norm(vec)
+        if norm > 0:
+            vec = vec / norm
+        self._frames[frame_key] = (asset_id, position, vec)
+
+    def delete_asset_frames(self, asset_id: str) -> None:
+        drop = [k for k, (aid, _, _) in self._frames.items() if aid == asset_id]
+        for k in drop:
+            del self._frames[k]
+
+    def search(
+        self,
+        *,
+        query_vector: Sequence[float],
+        top_k: int,
+    ) -> list[tuple[str, str, float, float]]:
+        q = np.asarray(query_vector, dtype=float)
+        qn = np.linalg.norm(q)
+        if qn > 0:
+            q = q / qn
+        scored: list[tuple[str, str, float, float]] = []
+        for frame_key, (asset_id, position, vec) in self._frames.items():
+            score = float(np.dot(q, vec))
+            scored.append((asset_id, frame_key, score, position))
+        scored.sort(key=lambda t: t[2], reverse=True)
+        return scored[:top_k]

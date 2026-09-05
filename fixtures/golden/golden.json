@@ -1,0 +1,62 @@
+[
+  {
+    "query": "a bright red circle",
+    "expected_asset_id": "red-circle.png",
+    "top_k": 5
+  },
+  {
+    "query": "a solid blue square",
+    "expected_asset_id": "blue-square.png",
+    "top_k": 5
+  },
+  {
+    "query": "a yellow triangle",
+    "expected_asset_id": "yellow-triangle.png",
+    "top_k": 5
+  },
+  {
+    "query": "green horizontal stripes",
+    "expected_asset_id": "green-stripes.png",
+    "top_k": 5
+  },
+  {
+    "query": "black and white checkerboard",
+    "expected_asset_id": "black-white-checker.png",
+    "top_k": 5
+  },
+  {
+    "query": "an orange colored video frame",
+    "expected_asset_id": "orange-video.mp4",
+    "top_k": 5
+  },
+  {
+    "query": "a purple video",
+    "expected_asset_id": "purple-video-short.mp4",
+    "top_k": 5
+  },
+  {
+    "query": "crimson round shape on light background",
+    "expected_asset_id": "red-circle.png",
+    "top_k": 5
+  },
+  {
+    "query": "azure blue rectangle",
+    "expected_asset_id": "blue-square.png",
+    "top_k": 5
+  },
+  {
+    "query": "gold triangular shape",
+    "expected_asset_id": "yellow-triangle.png",
+    "top_k": 5
+  },
+  {
+    "query": "\u8d64\u3044\u5186",
+    "expected_asset_id": "red-circle.png",
+    "top_k": 5
+  },
+  {
+    "query": "\u9752\u3044\u56db\u89d2",
+    "expected_asset_id": "blue-square.png",
+    "top_k": 5
+  }
+]

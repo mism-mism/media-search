@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# semantic-real Required gate for Feature 001.
+# Failure modes: model missing/download fail, golden Top-K miss.
+# Does NOT silently SKIP when model is unavailable.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+export GOLDEN_JSON="${GOLDEN_JSON:-$ROOT/fixtures/golden/golden.json}"
+export FIXTURE_IN="${FIXTURE_IN:-$ROOT/fixtures/golden/incoming}"
+export MEDIA_SEARCH_DATA="${MEDIA_SEARCH_DATA:-$ROOT/data/semantic-real}"
+export MEDIA_SEARCH_DB="${MEDIA_SEARCH_DB:-$MEDIA_SEARCH_DATA/media-local.db}"
+export MEDIA_SEARCH_MEDIA_ROOT="$FIXTURE_IN"
+export MEDIA_SEARCH_WORK="${MEDIA_SEARCH_WORK:-$MEDIA_SEARCH_DATA/work}"
+export EMBEDDER=local
+export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+
+if [[ ! -f "$GOLDEN_JSON" ]]; then
+  echo "error: missing golden file: $GOLDEN_JSON" >&2
+  echo "run: python3 scripts/prepare-golden-fixtures" >&2
+  exit 1
+fi
+if [[ ! -d "$FIXTURE_IN" ]]; then
+  echo "error: missing fixtures dir: $FIXTURE_IN" >&2
+  echo "run: python3 scripts/prepare-golden-fixtures" >&2
+  exit 1
+fi
+
+mkdir -p "$MEDIA_SEARCH_WORK"
+rm -f "$MEDIA_SEARCH_DB"
+
+echo "=== semantic-real: load OpenCLIP + import fixtures ==="
+python3 - <<'PY'
+from pathlib import Path
+import os, json, sys
+
+from media_search.adapters.openclip_embedder import get_shared_openclip_embedder
+from media_search.adapters.sqlite_store import (
+    SqliteMetadataRepository,
+    SqliteVecSearch,
+    open_db,
+)
+from media_search.adapters.media_probe import LocalMediaProbe
+from media_search.application.import_directory import ImportDirectory
+from media_search.application.search_media import SearchMediaAssets
+from media_search.ports.search import SearchQuery
+
+try:
+    embedder = get_shared_openclip_embedder()
+except Exception as exc:  # noqa: BLE001
+    print(f"FAIL: model setup/download failed: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+print(f"model={embedder.model_id} dim={embedder.dimension}")
+
+db = open_db(os.environ["MEDIA_SEARCH_DB"])
+meta = SqliteMetadataRepository(db)
+vectors = SqliteVecSearch(db, dimension=embedder.dimension)
+importer = ImportDirectory(
+    embedder=embedder,
+    vectors=vectors,
+    metadata=meta, media_probe=LocalMediaProbe(),
+    work_dir=Path(os.environ["MEDIA_SEARCH_WORK"]),
+)
+summary = importer.execute(Path(os.environ["MEDIA_SEARCH_MEDIA_ROOT"]))
+print(
+    f"import imported={len(summary.imported)} updated={len(summary.updated)} "
+    f"skipped={len(summary.skipped)}"
+)
+for s in summary.skipped:
+    print(f"  skip {s.path}: {s.reason}")
+if not summary.imported and not summary.updated:
+    print("FAIL: nothing imported", file=sys.stderr)
+    sys.exit(1)
+
+search = SearchMediaAssets(embedder=embedder, vectors=vectors, metadata=meta)
+cases = json.loads(Path(os.environ["GOLDEN_JSON"]).read_text(encoding="utf-8"))
+
+failures = []
+for case in cases:
+    q = case["query"]
+    expected = case["expected_asset_id"]
+    top_k = int(case.get("top_k", 5))
+    hits = search.execute(SearchQuery(q=q, top_k=top_k))
+    ids = [h.asset.asset_id for h in hits]
+    ok = expected in ids
+    status = "PASS" if ok else "FAIL"
+    print(f"{status}: q={q!r} expected={expected} top={ids}")
+    if not ok:
+        failures.append(case)
+
+if failures:
+    print(f"FAIL: {len(failures)}/{len(cases)} golden cases missed", file=sys.stderr)
+    sys.exit(1)
+print(f"PASS: {len(cases)}/{len(cases)} golden cases")
+PY
