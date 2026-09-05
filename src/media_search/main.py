@@ -24,9 +24,10 @@ def _build_embedder():
     if name == "fake":
         return name, FakeEmbedder(dimension=32)
     if name == "local":
-        from media_search.adapters.openclip_embedder import get_shared_openclip_embedder
+        from media_search.adapters.openclip_embedder import LazyOpenClipEmbedder
 
-        return name, get_shared_openclip_embedder()
+        # Lazy: Cloud Run must listen on PORT before HF/OpenCLIP download.
+        return name, LazyOpenClipEmbedder()
     raise SystemExit(f"unsupported EMBEDDER={name!r}")
 
 

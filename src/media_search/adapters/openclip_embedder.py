@@ -73,3 +73,45 @@ def get_shared_openclip_embedder() -> OpenClipEmbedder:
     """Process-wide singleton so model loads once (import + search)."""
     device = os.environ.get("MEDIA_SEARCH_DEVICE")
     return OpenClipEmbedder(device=device)
+
+
+# Default tower output width for xlm-roberta-base-ViT-B-32 / laion5b.
+# Override with OPENCLIP_DIMENSION if you change OPENCLIP_MODEL.
+_DEFAULT_LOCAL_DIMENSION = 512
+
+
+class LazyOpenClipEmbedder:
+    """Defer HF/OpenCLIP load until first embed so Cloud Run can bind PORT."""
+
+    def __init__(self) -> None:
+        self._inner: OpenClipEmbedder | None = None
+        self._dimension = int(
+            os.environ.get("OPENCLIP_DIMENSION", str(_DEFAULT_LOCAL_DIMENSION))
+        )
+        model = os.environ.get("OPENCLIP_MODEL", DEFAULT_OPENCLIP_MODEL)
+        pretrained = os.environ.get(
+            "OPENCLIP_PRETRAINED", DEFAULT_OPENCLIP_PRETRAINED
+        )
+        self._pending_model_id = f"open_clip:{model}/{pretrained}"
+
+    def _ensure(self) -> OpenClipEmbedder:
+        if self._inner is None:
+            self._inner = get_shared_openclip_embedder()
+            self._dimension = self._inner.dimension
+        return self._inner
+
+    @property
+    def dimension(self) -> int:
+        return self._dimension
+
+    @property
+    def model_id(self) -> str:
+        if self._inner is None:
+            return self._pending_model_id
+        return self._inner.model_id
+
+    def embed_image(self, image_bytes: bytes) -> np.ndarray:
+        return self._ensure().embed_image(image_bytes)
+
+    def embed_text(self, text: str) -> np.ndarray:
+        return self._ensure().embed_text(text)

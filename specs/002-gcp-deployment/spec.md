@@ -1,6 +1,6 @@
 ---
 id: "002"
-status: active
+status: completed
 profile: full
 profile_reason: "Production cloud adapter swap — Domain/ports stability, GCP services, secrets, Terraform + CD."
 ---
