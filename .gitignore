@@ -35,5 +35,8 @@ __pycache__/
 data/
 *.db
 
+# Generated eval corpora (JSON results are committed)
+harness/eval/**/corpus/
+
 # Worktrees (optional local convention)
 .worktrees/

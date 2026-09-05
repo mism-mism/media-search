@@ -1,0 +1,19 @@
+{
+  "pass": "openai-vitb32",
+  "model_id": "open_clip:ViT-B-32/openai",
+  "n_images": 16,
+  "n_queries": 12,
+  "recall_at_1": 1.0,
+  "recall_at_5": 1.0,
+  "embed_wall_seconds": 0.4,
+  "product_id_counts": {
+    "NEG-001": 1,
+    "NEG-002": 1,
+    "NEG-003": 1,
+    "NEG-004": 1,
+    "SKU-001": 3,
+    "SKU-002": 3,
+    "SKU-003": 3,
+    "SKU-004": 3
+  }
+}
