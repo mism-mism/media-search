@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
 
@@ -546,7 +547,13 @@ def create_app(
 
         frame_store = LocalFrameStore(frame_root)
 
-    app = FastAPI(title="media-search", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        # After PORT is bound: load OpenCLIP so the first user query is warm.
+        search.warm()
+        yield
+
+    app = FastAPI(title="media-search", version="0.1.0", lifespan=lifespan)
 
     @app.get("/", response_class=HTMLResponse)
     def ui() -> str:

@@ -82,7 +82,30 @@ jobs:
             --cpu=2 \
             --memory=8Gi \
             --port=8080 \
+            --min-instances=1 \
+            --no-cpu-throttling \
             --update-env-vars="EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,IMPORT_JOB_BACKEND=cloudrun,CLOUD_RUN_IMPORT_JOB=media-search-import,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},CLOUD_RUN_REGION=${REGION},GCS_BUCKET=media-search-${PROJECT_ID}-media,MEDIA_SEARCH_DB_GCS=gs://media-search-${PROJECT_ID}-media/state/media-local-cos.db"
+          SA=$(gcloud run services describe media-search \
+            --project="$PROJECT_ID" --region="$REGION" \
+            --format='value(spec.template.spec.serviceAccountName)')
+          if gcloud run jobs describe media-search-import \
+            --project="$PROJECT_ID" --region="$REGION" >/dev/null 2>&1; then
+            JOB_CMD=update
+          else
+            JOB_CMD=create
+          fi
+          gcloud run jobs "$JOB_CMD" media-search-import \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --image="$IMAGE" \
+            --service-account="$SA" \
+            --cpu=4 \
+            --memory=16Gi \
+            --task-timeout=3600 \
+            --max-retries=0 \
+            --command=python \
+            --args=-m,media_search.worker_import \
+            --set-env-vars="IMPORT_MODE=worker,EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_BUCKET=media-search-${PROJECT_ID}-media,GCS_PREFIX=incoming,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_DB_GCS=gs://media-search-${PROJECT_ID}-media/state/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},CLOUD_RUN_REGION=${REGION},IMPORT_EMBED_WORKERS=4"
           # Best-effort IAP enable when not public (ignore if API/CLI shape differs)
           if [[ "$ALLOW_UNAUTH" != "true" ]]; then
             gcloud beta run services update media-search \

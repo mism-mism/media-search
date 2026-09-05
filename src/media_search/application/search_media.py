@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from media_search.domain.media_asset import AssetSearchHit, FrameHit, MediaAsset, MediaType
+from media_search.domain.media_asset import AssetSearchHit, FrameHit, MediaAsset
 from media_search.ports.embedding import EmbeddingPort
 from media_search.ports.search import (
     ImageSearchQuery,
@@ -54,9 +54,7 @@ class SearchMediaAssets:
             )
 
         needle = q.lower()
-        for asset in self._metadata.list_all():
-            if not _text_matches(asset, needle):
-                continue
+        for asset in self._metadata.search_text(needle):
             prev = merged.get(asset.asset_id)
             if prev is None:
                 merged[asset.asset_id] = _HitAcc(
@@ -72,6 +70,13 @@ class SearchMediaAssets:
                     prev.score = TEXT_MATCH_FLOOR
 
         return self._finalize(merged, query)
+
+    def warm(self) -> None:
+        warm = getattr(self._embedder, "warm", None)
+        if callable(warm):
+            warm()
+        else:
+            self._embedder.embed_text("warmup")
 
     def execute_image(self, query: ImageSearchQuery) -> list[AssetSearchHit]:
         if not query.image_bytes:
@@ -162,12 +167,6 @@ class _HitAcc:
         self.frame_key = frame_key
         self.position = position
         self.kinds = kinds
-
-
-def _text_matches(asset: MediaAsset, needle: str) -> bool:
-    if needle in (asset.display_name or "").lower():
-        return True
-    return any(needle in t.lower() for t in asset.tags)
 
 
 def _tags_include_all(asset_tags: list[str], required: tuple[str, ...]) -> bool:

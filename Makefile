@@ -54,6 +54,8 @@ deploy:
 	  --memory=8Gi \
 	  --port=8080 \
 	  --timeout=300 \
+	  --min-instances=1 \
+	  --no-cpu-throttling \
 	  --update-env-vars="EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,IMPORT_JOB_BACKEND=cloudrun,CLOUD_RUN_IMPORT_JOB=$(JOB),GOOGLE_CLOUD_PROJECT=$(PROJECT),CLOUD_RUN_REGION=$(REGION),GCS_BUCKET=$(BUCKET),MEDIA_SEARCH_DB_GCS=gs://$(BUCKET)/state/media-local-cos.db"; \
 	if gcloud run jobs describe "$(JOB)" --project="$(PROJECT)" --region="$(REGION)" >/dev/null 2>&1; then \
 	  JOB_CMD=update; \
@@ -65,13 +67,13 @@ deploy:
 	  --region="$(REGION)" \
 	  --image="$(IMAGE)" \
 	  --service-account="$$SA" \
-	  --cpu=2 \
-	  --memory=8Gi \
+	  --cpu=4 \
+	  --memory=16Gi \
 	  --task-timeout=3600 \
 	  --max-retries=0 \
 	  --command=python \
 	  --args=-m,media_search.worker_import \
-	  --set-env-vars="IMPORT_MODE=worker,EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_BUCKET=$(BUCKET),GCS_PREFIX=incoming,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_DB_GCS=gs://$(BUCKET)/state/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,GOOGLE_CLOUD_PROJECT=$(PROJECT),CLOUD_RUN_REGION=$(REGION)"; \
+	  --set-env-vars="IMPORT_MODE=worker,EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_BUCKET=$(BUCKET),GCS_PREFIX=incoming,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_DB_GCS=gs://$(BUCKET)/state/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,GOOGLE_CLOUD_PROJECT=$(PROJECT),CLOUD_RUN_REGION=$(REGION),IMPORT_EMBED_WORKERS=4"; \
 	gcloud run jobs add-iam-policy-binding "$(JOB)" \
 	  --project="$(PROJECT)" --region="$(REGION)" \
 	  --member="serviceAccount:$$SA" \

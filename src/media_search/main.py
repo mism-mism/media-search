@@ -8,6 +8,7 @@ from pathlib import Path
 
 import uvicorn
 
+from media_search.adapters.caching_embedder import CachingEmbedder
 from media_search.adapters.filesystem_import_lock import FilesystemImportLock
 from media_search.adapters.import_job_store import FilesystemJobStore, GcsJobStore
 from media_search.adapters.import_jobs import CloudRunImportJobs, LocalThreadImportJobs
@@ -120,6 +121,8 @@ def build_runtime() -> Runtime:
     data_dir = Path(os.environ.get("MEDIA_SEARCH_DATA", "data")).resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
     embedder_mode, embedder = _build_embedder()
+    if embedder_mode == "local":
+        embedder = CachingEmbedder(embedder)
     default_db = data_dir / (
         "media-fake.db" if embedder_mode == "fake" else "media-local-cos.db"
     )

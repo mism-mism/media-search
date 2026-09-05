@@ -115,3 +115,8 @@ class LazyOpenClipEmbedder:
 
     def embed_text(self, text: str) -> np.ndarray:
         return self._ensure().embed_text(text)
+
+    def warm(self) -> None:
+        """Load weights now (after PORT bind) so the first user query is warm."""
+        self._ensure()
+        self.embed_text("warmup")
