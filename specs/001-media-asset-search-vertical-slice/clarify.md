@@ -58,6 +58,8 @@ Resolved in grilling (2026-09-05). Product/Architecture/Spec split agreed.
 | D4 | Semantic + mediaType/tags(AND); q required; no keyword; video multi-frame→MediaAsset max/bestFrame | Human | 2026-09-05 |
 | D5 | Profile full; Fake≠semantic PASS; semantic-real Required separate gate | Human | 2026-09-05 |
 | D6 | Shared understanding locked (4-layer decision log) | Human | 2026-09-05 |
+| D7 | AC9 human “usable” PASS (Local + real photos; JA/semantic queries) | Human (operator) | 2026-09-05 |
+| D8 | Feature 001 converged → status completed; 002 not started until handoff | Human | 2026-09-05 |
 
 ## Unresolved items
 

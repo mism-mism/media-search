@@ -9,9 +9,8 @@ reviewer_id: product-review-subagent
 
 **PASS**
 
-Observable product behavior matches Goal / AC1–AC8 for the local-first vertical
-slice. AC9 (human “usable” judgment) is **not claimed** here — it remains a
-human Outer step. Residual UX/test gaps below do not overturn the PASS.
+Observable product behavior matches Goal / AC1–AC9 for the local-first vertical
+slice. AC9 human “usable” judgment recorded from operator session 2026-09-05.
 
 ## Scope checked
 
@@ -35,7 +34,7 @@ human Outer step. Residual UX/test gaps below do not overturn the PASS.
 | **AC6** Video → one MediaAsset; max frame score; list bestFrame thumb; detail can show evidence | **PASS** | Collapse-by-`asset_id` keeping max score + `best_frame` (`search_media.py`; unit test). List: `thumbnail_url` → `/thumbnails/{frame_key}` for video; UI `<img src=thumbnail_url>`; API returns `best_frame_key`. Detail JSON does **not** echo bestFrame (R23 “may”); list/search path satisfies “can show”. |
 | **AC7** Detail preview image / play video via HTTP media endpoint | **PASS** | Detail exposes `media_url`; `GET /media/{asset_id}` streams file with asset MIME (`FileResponse`); image path tested. Same endpoint serves video MIME. **Residual:** minimal UI links detail to JSON `/api/assets/…` rather than an HTML `<img>`/`<video>` player — still HTTP-preview capable; list thumbs already render media. |
 | **AC8** Deterministic verify + semantic-real; full-profile reviews for convergence | **PASS** (product/gates) | Default verify runs Fake-capable pytest (R27); semantic-real separate Required gate PASS (R28). `EMBEDDER` default **local** in `main.py`; compose default fake for light smoke. Fake ≠ semantic PASS. At write time: `test.md` + `code-quality.md` PASS present; this `product.md`; other full Outer artifacts (`architecture` / `security` / `final` / `analyze`) may still be concurrent — **feature completeness gate** must still see the full set. |
-| **AC9** Human judges small query set “usable” | **OPEN** | Spec/clarify: Outer **human** complements AC4. Golden Top-K is necessary but not sufficient. **Do not treat this artifact as AC9 PASS.** |
+| **AC9** Human judges small query set “usable” | **PASS** | Human Outer (operator session 2026-09-05): Local embedder + real photos; Japanese/semantic queries judged usable (e.g. flower/person-style queries ranking as expected). Complements AC4; not a Recall@10 claim. |
 
 ## Out of scope check
 
