@@ -66,7 +66,14 @@ Cloud Run (project IAM). Bind WIF per Google’s GitHub Actions docs.
 
 ## 2. Dispatch CD
 
-Actions → **deploy-gcp** → Run workflow → enter `project_id` / `region` / tag.
+Everyday local rebuild (amd64 → Artifact Registry → Cloud Run + Import Job):
+
+```bash
+make deploy
+# optional tag: make deploy IMAGE_TAG=005-006
+```
+
+Or GitHub Actions → **deploy-gcp** → Run workflow → enter `project_id` / `region` / tag.
 
 The workflow builds with `INSTALL_SEMANTIC=1`, `INSTALL_GCP=1`, and
 `PREWARM_OPENCLIP=1` (CPU torch wheels — CUDA wheels OOM on Cloud Run), pushes

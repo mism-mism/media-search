@@ -16,8 +16,9 @@ Import → OpenCLIP embed → sqlite-vec → Search UI/API
 | ドメイン用語 | [`docs/DOMAIN.md`](docs/DOMAIN.md) · [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
 | アーキテクチャ | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | **ローカル起動** | 下の Quick start · [`docs/run-docker.md`](docs/run-docker.md) |
-| **GCP デプロイ (002)** | [`docs/run-gcp.md`](docs/run-gcp.md) |
+| **GCP デプロイ (002)** | [`docs/run-gcp.md`](docs/run-gcp.md) · `make deploy` |
 | **IAP 鍵かけ (003)** | [`docs/run-gcp-iap.md`](docs/run-gcp-iap.md) |
+| 日常コマンド | `make test` · `make deploy` |
 | Feature 仕様 | [`specs/`](specs/) |
 | Agent 契約 | [`AGENTS.md`](AGENTS.md) · [`CONSTITUTION.md`](CONSTITUTION.md) |
 | 検証 / CI | [`docs/CI.md`](docs/CI.md) · `./scripts/verify` |
