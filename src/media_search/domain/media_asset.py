@@ -14,7 +14,7 @@ class MediaType(str, Enum):
 class MediaAsset:
     """Searchable media unit returned to users."""
 
-    asset_id: str  # relative path from import root
+    asset_id: str  # stable storage key (relative path)
     media_type: MediaType
     mime_type: str
     size_bytes: int
@@ -23,6 +23,8 @@ class MediaAsset:
     duration_seconds: Optional[float] = None
     tags: list[str] = field(default_factory=list)
     description: str = ""
+    display_name: str = ""
+    folder_id: Optional[str] = None
 
 
 @dataclass(frozen=True)

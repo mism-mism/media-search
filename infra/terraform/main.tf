@@ -167,6 +167,34 @@ resource "google_cloud_run_v2_service" "app" {
         name  = "MEDIA_SEARCH_WORK"
         value = "/tmp/media-search/work"
       }
+      env {
+        name  = "FRAME_BACKEND"
+        value = "gcs"
+      }
+      env {
+        name  = "GCS_FRAMES_PREFIX"
+        value = "frames"
+      }
+      env {
+        name  = "IMPORT_LOCK_BACKEND"
+        value = "gcs"
+      }
+      env {
+        name  = "IMPORT_JOB_BACKEND"
+        value = "cloudrun"
+      }
+      env {
+        name  = "CLOUD_RUN_IMPORT_JOB"
+        value = "${var.name_prefix}-import"
+      }
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "CLOUD_RUN_REGION"
+        value = var.region
+      }
     }
     scaling {
       min_instance_count = 0
@@ -211,6 +239,106 @@ resource "google_iap_web_cloud_run_service_iam_member" "access" {
   member                 = each.value
 }
 
+resource "google_cloud_run_v2_job" "import" {
+  count    = local.deploy_run ? 1 : 0
+  name     = "${var.name_prefix}-import"
+  location = var.region
+
+  template {
+    template {
+      service_account = google_service_account.run.email
+      timeout         = "3600s"
+      max_retries     = 0
+
+      containers {
+        image   = var.image
+        command = ["python", "-m", "media_search.worker_import"]
+        resources {
+          limits = {
+            cpu    = "2"
+            memory = "8Gi"
+          }
+        }
+        env {
+          name  = "IMPORT_MODE"
+          value = "worker"
+        }
+        env {
+          name  = "EMBEDDER"
+          value = var.embedder
+        }
+        env {
+          name  = "MEDIA_BACKEND"
+          value = "gcs"
+        }
+        env {
+          name  = "GCS_BUCKET"
+          value = google_storage_bucket.media.name
+        }
+        env {
+          name  = "GCS_PREFIX"
+          value = "incoming"
+        }
+        env {
+          name  = "FRAME_BACKEND"
+          value = "gcs"
+        }
+        env {
+          name  = "GCS_FRAMES_PREFIX"
+          value = "frames"
+        }
+        env {
+          name  = "IMPORT_LOCK_BACKEND"
+          value = "gcs"
+        }
+        env {
+          name  = "MEDIA_SEARCH_DATA"
+          value = "/tmp/media-search"
+        }
+        env {
+          name  = "MEDIA_SEARCH_DB"
+          value = "/tmp/media-search/media-local-cos.db"
+        }
+        env {
+          name  = "MEDIA_SEARCH_DB_GCS"
+          value = "gs://${google_storage_bucket.media.name}/state/media-local-cos.db"
+        }
+        env {
+          name  = "MEDIA_SEARCH_WORK"
+          value = "/tmp/media-search/work"
+        }
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project_id
+        }
+        env {
+          name  = "CLOUD_RUN_REGION"
+          value = var.region
+        }
+      }
+    }
+  }
+
+  depends_on = [google_project_service.services]
+}
+
+resource "google_cloud_run_v2_job_iam_member" "run_invoker" {
+  count    = local.deploy_run ? 1 : 0
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_job.import[0].name
+  role     = "roles/run.developer"
+  member   = "serviceAccount:${google_service_account.run.email}"
+}
+
+# Allow the web service SA to execute the import Job.
+resource "google_project_iam_member" "run_job_runner" {
+  count   = local.deploy_run ? 1 : 0
+  project = var.project_id
+  role    = "roles/run.developer"
+  member  = "serviceAccount:${google_service_account.run.email}"
+}
+
 output "artifact_registry" {
   value = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}"
 }
@@ -225,6 +353,10 @@ output "service_account" {
 
 output "cloud_run_uri" {
   value = try(google_cloud_run_v2_service.app[0].uri, null)
+}
+
+output "import_job_name" {
+  value = try(google_cloud_run_v2_job.import[0].name, null)
 }
 
 output "allow_unauthenticated" {

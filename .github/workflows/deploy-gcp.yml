@@ -82,7 +82,7 @@ jobs:
             --cpu=2 \
             --memory=8Gi \
             --port=8080 \
-            --set-env-vars="EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work" \
+            --set-env-vars="EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,IMPORT_JOB_BACKEND=cloudrun,CLOUD_RUN_IMPORT_JOB=media-search-import,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},CLOUD_RUN_REGION=${REGION}" \
             --update-env-vars="GCS_BUCKET=media-search-${PROJECT_ID}-media,MEDIA_SEARCH_DB_GCS=gs://media-search-${PROJECT_ID}-media/state/media-local-cos.db"
           # Best-effort IAP enable when not public (ignore if API/CLI shape differs)
           if [[ "$ALLOW_UNAUTH" != "true" ]]; then

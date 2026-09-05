@@ -44,7 +44,9 @@ Do **not** develop by deploying to GCP from day one.
 | **001** Local-first Media Asset Search Vertical Slice | Prove semantic search + filters + preview locally | completed |
 | **002** `gcp-deployment` | Cloud Run + GCS; OpenCLIP + sqlite-vec; Terraform + CD | completed |
 | **003** `iap-access` | IAP (External + Gmail allowlist) before production | completed |
-| **004+** | Vertex eval (optional) — [PR #7](https://github.com/mism-mism/media-search/pull/7) | draft |
+| **004** | Vertex embeddings eval — no-go cutover; OpenCLIP remains default | draft / PR |
+| **005** `scale-media-ingest` | ~10k image+video; team UI → Cloud Run Job; GCS thumbs; sqlite single-writer | active (implemented on branch) |
+| **006** `media-library` | Virtual folders + upload/manage + colocated search | active |
 
 Rules:
 

@@ -49,5 +49,5 @@ ENV MEDIA_SEARCH_DATA=/data \
 
 EXPOSE 8080
 
-# Cloud Run injects PORT; default 8080 for local parity.
+# Service: HTTP. Job overrides command to `python -m media_search.worker_import`.
 CMD ["sh", "-c", "uvicorn media_search.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

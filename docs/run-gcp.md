@@ -17,6 +17,29 @@ stack to **Cloud Run + GCS** with Terraform + GitHub Actions.
 
 Vertex embeddings / Vector Search remain **out of scope**.
 
+## Scale ingest (005)
+
+| Piece | Choice |
+|-------|--------|
+| Heavy Import | Cloud Run **Job** `media-search-import` (UI enqueues) |
+| Single writer | GCS lock object `state/import.lock.json` |
+| Frame thumbs | GCS prefix `frames/` (survive scale-to-zero) |
+| Job status | GCS `state/import-jobs/*.json` |
+| Embedder | OpenCLIP (unchanged) |
+
+### Operator flow (~10k)
+
+1. Upload media to `gs://$BUCKET/incoming/` (images + videos).
+2. Open the IAP UI → **Import** (or `POST /api/import` with empty path).
+3. Poll `/api/import/jobs/{id}` / UI status until `succeeded`.
+4. Search as usual; video thumbs come from GCS frames.
+5. Overlapping Import → **409** until the lock clears.
+
+Local/dev without Job: omit `CLOUD_RUN_IMPORT_JOB` — Import runs on a
+background thread (set `IMPORT_SYNC=1` for inline tests).
+
+Worker entrypoint: `python -m media_search.worker_import` (Job command).
+
 ## Prerequisites
 
 1. GCP project with billing

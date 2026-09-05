@@ -20,6 +20,17 @@ class InMemoryMetadataRepository:
     def list_all(self) -> list[MediaAsset]:
         return list(self._items.values())
 
+    def list_by_folder(self, folder_id: Optional[str]) -> list[MediaAsset]:
+        return [
+            a
+            for a in self._items.values()
+            if (folder_id is None and a.folder_id is None)
+            or (folder_id is not None and a.folder_id == folder_id)
+        ]
+
+    def delete(self, asset_id: str) -> None:
+        self._items.pop(asset_id, None)
+
 
 class InMemoryVectorSearch:
     """Exact cosine over stored frame vectors (001-scale Fake/Local stand-in)."""

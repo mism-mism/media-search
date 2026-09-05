@@ -43,6 +43,18 @@ class GcsMediaStorage:
     def read_bytes(self, key: str) -> bytes:
         return self._bucket.blob(self._blob_name(key)).download_as_bytes()
 
+    def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
+        blob = self._bucket.blob(self._blob_name(key))
+        blob.upload_from_string(data, content_type=content_type or "application/octet-stream")
+
+    def delete(self, key: str) -> None:
+        blob = self._bucket.blob(self._blob_name(key))
+        if blob.exists():
+            blob.delete()
+        meta = self._bucket.blob(self._blob_name(f"{key}.meta.json"))
+        if meta.exists():
+            meta.delete()
+
     def open_stream(self, key: str) -> BinaryIO:
         from io import BytesIO
 
