@@ -3,7 +3,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.40"
+      version = "~> 6.40"
     }
   }
 }
@@ -109,7 +109,10 @@ resource "google_cloud_run_v2_service" "app" {
   # after IAM below (provider attribute support varies). See docs/run-gcp-iap.md.
 
   template {
-    service_account = google_service_account.run.email
+    service_account     = google_service_account.run.email
+    timeout             = "300s"
+    execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
+
     containers {
       image = var.image
       ports {
@@ -118,8 +121,19 @@ resource "google_cloud_run_v2_service" "app" {
       resources {
         limits = {
           cpu    = "2"
-          memory = "4Gi"
+          memory = "8Gi"
         }
+        cpu_idle          = true
+        startup_cpu_boost = true
+      }
+      startup_probe {
+        http_get {
+          path = "/health"
+        }
+        initial_delay_seconds = 0
+        period_seconds        = 5
+        failure_threshold     = 24
+        timeout_seconds       = 3
       }
       env {
         name  = "EMBEDDER"
@@ -190,7 +204,7 @@ resource "google_cloud_run_v2_service_iam_member" "iap_invoker" {
 
 resource "google_iap_web_cloud_run_service_iam_member" "access" {
   for_each               = local.deploy_run && local.iap_mode ? toset(var.iap_members) : toset([])
-  project                = tostring(data.google_project.current.number)
+  project                = var.project_id
   location               = var.region
   cloud_run_service_name = google_cloud_run_v2_service.app[0].name
   role                   = "roles/iap.httpsResourceAccessor"

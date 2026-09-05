@@ -1,6 +1,6 @@
 ---
 id: "003"
-status: active
+status: completed
 profile: full
 profile_reason: "Access control / IAM / IAP for internet-facing Cloud Run — security-sensitive."
 ---

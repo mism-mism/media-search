@@ -59,6 +59,7 @@ jobs:
           docker build \
             --build-arg INSTALL_SEMANTIC=1 \
             --build-arg INSTALL_GCP=1 \
+            --build-arg PREWARM_OPENCLIP=1 \
             -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
@@ -79,7 +80,7 @@ jobs:
             --image="$IMAGE" \
             "${AUTH_FLAG[@]}" \
             --cpu=2 \
-            --memory=4Gi \
+            --memory=8Gi \
             --port=8080 \
             --set-env-vars="EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work" \
             --update-env-vars="GCS_BUCKET=media-search-${PROJECT_ID}-media,MEDIA_SEARCH_DB_GCS=gs://media-search-${PROJECT_ID}-media/state/media-local-cos.db"

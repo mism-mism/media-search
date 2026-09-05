@@ -1,100 +1,58 @@
-# agentic-engineering-template
+# media-search
 
-Portable **Project OS** for AI-assisted software engineering.
-Standardizes Spec-Driven Development, Harness Engineering, Agent Review,
-Mechanical Verification, and Human Review — without shipping a product app.
-
-## Why this exists
-
-Agents are fast and unreliable as sole judges of correctness. This template
-makes specs the source of truth, verification honest, hooks enforceable, and
-review independent — with **closed Inner/Outer loops** defining when work has
-converged.
-
-## Core philosophy
-
-- Specs over vibes; Open Questions go to humans
-- Profiles select **assurance by risk** (`lean` / `full`), not estimated effort
-- `SKIP` is never `PASS`
-- Hooks = deterministic boundary enforcement; Review = judgment
-- Loops = quality **creation**; CI = quality **enforcement**
-- Every mandatory ceremony protects a **named failure mode**
-- Portable Project OS: no dependency on anyone’s personal Agent OS
-- Roles are vendor-neutral; runtimes admit by **capabilities** (`docs/RUNTIME.md`)
-
-## Architecture
+ローカル優先の **メディア資産セマンティック検索**。画像・動画を取り込み、意味で探し、プレビューする。
 
 ```text
-CONSTITUTION → RULES → HOOKS → VERIFY → LOOPS → ROLES → RUNTIME → (any capable agent)
-                                      ↑
-                               specs/ + AGENTS.md
+Import → OpenCLIP embed → sqlite-vec → Search UI/API
+                │
+        Local (001)  /  GCP Cloud Run + GCS (002)  /  IAP (003)
 ```
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/LOOPS.md`](docs/LOOPS.md),
-[`docs/RUNTIME.md`](docs/RUNTIME.md), and [`hooks/README.md`](hooks/README.md).
+## Menu
 
-## Human vs Agent
+| 行きたいこと | ドキュメント |
+|--------------|--------------|
+| プロダクト意図 | [`docs/PRODUCT.md`](docs/PRODUCT.md) |
+| ドメイン用語 | [`docs/DOMAIN.md`](docs/DOMAIN.md) · [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
+| アーキテクチャ | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| **ローカル起動** | 下の Quick start · [`docs/run-docker.md`](docs/run-docker.md) |
+| **GCP デプロイ (002)** | [`docs/run-gcp.md`](docs/run-gcp.md) |
+| **IAP 鍵かけ (003)** | [`docs/run-gcp-iap.md`](docs/run-gcp-iap.md) |
+| Feature 仕様 | [`specs/`](specs/) |
+| Agent 契約 | [`AGENTS.md`](AGENTS.md) · [`CONSTITUTION.md`](CONSTITUTION.md) |
+| 検証 / CI | [`docs/CI.md`](docs/CI.md) · `./scripts/verify` |
 
-| Human | Agent |
-|-------|--------|
-| What / Why / Constraints / Priority / Acceptance / Judgment | Clarify / Plan / Implement / Inner+Outer loops / Fix |
+## Features
 
-## Standard workflow
+| ID | Status | 内容 |
+|----|--------|------|
+| [001](specs/001-media-asset-search-vertical-slice/spec.md) | completed | Local-first 垂直スライス |
+| [002](specs/002-gcp-deployment/spec.md) | completed | Cloud Run + GCS + OpenCLIP |
+| [003](specs/003-iap-access/spec.md) | completed | IAP（External + Gmail allowlist） |
+| [004](https://github.com/mism-mism/media-search/pull/7) | draft | Vertex eval（並行） |
 
-**Lean:** Specify → Clarify? → Plan → Tasks → pre-implement → Implement → **Inner Loop**
-(test + code-quality) → **Outer Loop** (product) → Converge if needed → pre-merge → Human
-
-**Full:** + Checklist; Outer adds architecture, security, final (and forced for
-architecture/security/constitution)
-
-Details: [`docs/LOOPS.md`](docs/LOOPS.md).
-
-## Starting a new project (from this template)
-
-```bash
-# after GitHub "Use this template" + clone:
-./scripts/adopt
-# edit docs/PRODUCT.md DOMAIN.md GLOSSARY.md
-# configure GitHub settings: docs/ADOPTION.md
-./scripts/new-feature <slug>   # → specs/001-<slug>/
-```
-
-## Starting a new feature (inside an adopted project)
+## Quick start (local)
 
 ```bash
 ./scripts/bootstrap
-./scripts/new-feature asset-search
-./hooks/pre-implement/check 00N-asset-search
+# fake embedder smoke
+EMBEDDER=fake uvicorn media_search.main:app --reload --port 8000
+# real OpenCLIP (needs [semantic] extras)
+pip install -e ".[semantic]"
+EMBEDDER=local uvicorn media_search.main:app --port 8000
 ```
 
-## Verification
+Open http://127.0.0.1:8000 — import a folder, then search with `q`.
 
-```bash
-./scripts/verify
-FEATURE=00N-slug ./scripts/verify
-./hooks/pre-merge/check
-```
+## GCP (summary)
 
-CI is a thin adapter that runs `pre-merge` (see [`docs/CI.md`](docs/CI.md)).
-Configure the workflow as a **required status check** for real merge protection.
+1. Terraform: [`infra/terraform`](infra/terraform) — see [`docs/run-gcp.md`](docs/run-gcp.md)
+2. Image: `INSTALL_SEMANTIC=1` `INSTALL_GCP=1` `PREWARM_OPENCLIP=1`（CPU torch）
+3. Production: `allow_unauthenticated=false` + IAP — [`docs/run-gcp-iap.md`](docs/run-gcp-iap.md)
 
-## Review flow
+本番の公開 URL は IAP 必須。`allUsers` 公開は実験専用。
 
-Implementer mutates; evaluators evaluate only. Artifacts under
-`harness/reviews/<feature>/`. Feature-scoped verify / pre-merge enforce presence
-by profile (lean Inner: test + code-quality; lean Outer: product).
+## Project OS (template layer)
 
-## References
-
-[`docs/REFERENCES.md`](docs/REFERENCES.md) · [`docs/adr/`](docs/adr/) ·
-[`docs/LOOPS.md`](docs/LOOPS.md)
-
-## Current limitations (v0)
-
-- Stack enforcers intentionally `not_configured`
-- Review quality not CI-judged; evaluator identity independence not mechanically proven
-- No `./scripts/loop` runner (contract-only Loop Engineering)
-- Vendor agent CLI ban is contractual (no grep gate yet)
-- Native Claude/Git hook configs not shipped
-- Rulesets must be configured by adopters (documented in `docs/CI.md`)
-- Worktree automation not included
+このリポジトリは Spec / Hooks / Verify / Review の Project OS も同梱します。  
+ループと役割: [`docs/LOOPS.md`](docs/LOOPS.md) · [`docs/RUNTIME.md`](docs/RUNTIME.md)

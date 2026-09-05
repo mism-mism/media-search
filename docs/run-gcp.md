@@ -10,8 +10,8 @@ stack to **Cloud Run + GCS** with Terraform + GitHub Actions.
 | Runtime | Cloud Run |
 | Media | GCS (`MEDIA_BACKEND=gcs`) |
 | Index | sqlite + sqlite-vec (synced to `gs://…/state/*.db` after import) |
-| Embed | OpenCLIP in the container (`EMBEDDER=local`) |
-| Auth | none (v0; `--allow-unauthenticated`) |
+| Embed | OpenCLIP in the container (`EMBEDDER=local`; CPU torch + prewarm) |
+| Auth | Experiment: none. **Production: IAP** — [`run-gcp-iap.md`](run-gcp-iap.md) |
 | IaC | `infra/terraform` |
 | CD | `.github/workflows/deploy-gcp.yml` (`workflow_dispatch`) |
 
@@ -45,8 +45,9 @@ Cloud Run (project IAM). Bind WIF per Google’s GitHub Actions docs.
 
 Actions → **deploy-gcp** → Run workflow → enter `project_id` / `region` / tag.
 
-The workflow builds with `INSTALL_SEMANTIC=1` and `INSTALL_GCP=1`, pushes to
-`media-search-repo`, and deploys Cloud Run env for GCS.
+The workflow builds with `INSTALL_SEMANTIC=1`, `INSTALL_GCP=1`, and
+`PREWARM_OPENCLIP=1` (CPU torch wheels — CUDA wheels OOM on Cloud Run), pushes
+to `media-search-repo`, and deploys Cloud Run env for GCS.
 
 ## 3. Upload media + import
 
@@ -79,6 +80,7 @@ FEATURE=002-gcp-deployment ./scripts/verify
 | Experiment (002 v0) | `true` | Temporary public URL — **not production** |
 | Production | `false` + IAP emails | See [`run-gcp-iap.md`](run-gcp-iap.md) |
 
-**Do not cut over to production until Feature 003 (IAP) has converged** and you
-have verified browser login with your allowlisted Gmail.
+**Do not cut over to production without IAP** (Feature 003). Prefer
+`allow_unauthenticated=false` + browser smoke with your allowlisted Gmail.
+See [`run-gcp-iap.md`](run-gcp-iap.md).
 
