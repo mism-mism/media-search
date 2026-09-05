@@ -42,13 +42,17 @@ Do **not** develop by deploying to GCP from day one.
 | Feature | Intent |
 |---------|--------|
 | **001** Local-first Media Asset Search Vertical Slice | Prove semantic search + filters + preview locally; converge Inner/Outer |
-| **002** `gcp-deployment` | Cloud Run + GCS; same OpenCLIP + sqlite-vec; Terraform + Actions CD; Vertex deferred |
+| **002** `gcp-deployment` | Cloud Run + GCS; same OpenCLIP + sqlite-vec; Terraform + Actions CD; **auth none (v0)** |
+| **003** `iap-access` | **IAP** for Cloud Run; required before production cutover |
+| **004+** | Vertex eval (optional later) — see GitHub issues |
 
 Rules:
 
-- Concrete GCP service selection happens in Feature **002** (now that 001 has
-  converged).
-- Feature **002** specs live under `specs/002-gcp-deployment/`.
+- Concrete GCP service selection for compute/storage is Feature **002**.
+- **Do not cut over to production** until Feature **003 (IAP)** converges.
+- Feature **002** may merge as unauthenticated plumbing; treat public URLs as
+  experimental only.
+- Feature specs: `specs/002-gcp-deployment/`, `specs/003-iap-access/`.
 - Bootstrap prompt summary (non-SoR):
   [`docs/prompts/media-search-server-bootstrap.md`](prompts/media-search-server-bootstrap.md)
 
