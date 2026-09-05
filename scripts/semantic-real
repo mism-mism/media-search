@@ -41,6 +41,7 @@ from media_search.adapters.sqlite_store import (
     SqliteVecSearch,
     open_db,
 )
+from media_search.adapters.local_media_storage import LocalMediaStorage
 from media_search.adapters.media_probe import LocalMediaProbe
 from media_search.application.import_directory import ImportDirectory
 from media_search.application.search_media import SearchMediaAssets
@@ -63,7 +64,7 @@ importer = ImportDirectory(
     metadata=meta, media_probe=LocalMediaProbe(),
     work_dir=Path(os.environ["MEDIA_SEARCH_WORK"]),
 )
-summary = importer.execute(Path(os.environ["MEDIA_SEARCH_MEDIA_ROOT"]))
+summary = importer.execute_storage(LocalMediaStorage(Path(os.environ["MEDIA_SEARCH_MEDIA_ROOT"])))
 print(
     f"import imported={len(summary.imported)} updated={len(summary.updated)} "
     f"skipped={len(summary.skipped)}"

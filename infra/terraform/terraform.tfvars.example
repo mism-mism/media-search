@@ -1,0 +1,4 @@
+# Example (do not commit secrets):
+# project_id = "my-gcp-project"
+# region     = "asia-northeast1"
+# image      = "asia-northeast1-docker.pkg.dev/my-gcp-project/media-search-repo/media-search:latest"

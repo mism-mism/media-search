@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from media_search.application.frame_paths import frame_cache_path
@@ -14,6 +14,7 @@ from media_search.domain.frames import (
 from media_search.domain.media_asset import MediaType
 from media_search.ports.embedding import EmbeddingPort
 from media_search.ports.media_probe import MediaProbePort
+from media_search.ports.media_storage import MediaStoragePort
 from media_search.ports.search import MetadataRepositoryPort, VectorSearchPort
 
 
@@ -46,45 +47,46 @@ class ImportDirectory:
         self._media_probe = media_probe
         self._work_dir = work_dir
 
-    def execute(self, import_root: Path) -> ImportSummary:
-        root = import_root.resolve()
-        if not root.is_dir():
-            raise FileNotFoundError(f"import root not found: {root}")
-
+    def execute_storage(self, storage: MediaStoragePort) -> ImportSummary:
         summary = ImportSummary()
-        paths = sorted(p for p in root.rglob("*") if p.is_file())
-        # ignore sidecar json
-        paths = [p for p in paths if not p.name.endswith(".meta.json")]
-
-        for path in paths:
-            kind = classify_path(path)
-            if kind is None:
-                summary.skipped.append(
-                    ImportWarning(path=str(path), reason="unsupported format")
-                )
-                continue
-            try:
-                existed = self._metadata.get(
-                    path.resolve().relative_to(root).as_posix()
-                )
-                asset = self._media_probe.build_asset(path, import_root=root)
-                self._vectors.delete_asset_frames(asset.asset_id)
-                self._index_frames(path, asset)
-                self._metadata.upsert(asset)
-                if existed:
-                    summary.updated.append(asset.asset_id)
-                else:
-                    summary.imported.append(asset.asset_id)
-            except Exception as exc:  # noqa: BLE001 — collect per-file failures
-                # Avoid orphan vectors from a half-finished index attempt.
+        stage = Path(self._work_dir) / "import-stage" if self._work_dir else Path(
+            tempfile.mkdtemp()
+        )
+        own_stage = self._work_dir is None
+        stage.mkdir(parents=True, exist_ok=True)
+        try:
+            for key in storage.list_media_keys():
+                kind = classify_path(Path(key))
+                if kind is None:
+                    summary.skipped.append(
+                        ImportWarning(path=key, reason="unsupported format")
+                    )
+                    continue
                 try:
-                    asset_id = path.resolve().relative_to(root).as_posix()
-                    self._vectors.delete_asset_frames(asset_id)
-                except Exception:  # noqa: BLE001
-                    pass
-                summary.skipped.append(
-                    ImportWarning(path=str(path), reason=f"import failed: {exc}")
-                )
+                    existed = self._metadata.get(key)
+                    with storage.materialize(key, stage) as local_path:
+                        asset = self._media_probe.build_asset(
+                            local_path, import_root=local_path.parent
+                        )
+                        asset = replace(asset, asset_id=key)
+                        self._vectors.delete_asset_frames(asset.asset_id)
+                        self._index_frames(local_path, asset)
+                        self._metadata.upsert(asset)
+                    if existed:
+                        summary.updated.append(asset.asset_id)
+                    else:
+                        summary.imported.append(asset.asset_id)
+                except Exception as exc:  # noqa: BLE001
+                    try:
+                        self._vectors.delete_asset_frames(key)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    summary.skipped.append(
+                        ImportWarning(path=key, reason=f"import failed: {exc}")
+                    )
+        finally:
+            if own_stage:
+                shutil.rmtree(stage, ignore_errors=True)
         return summary
 
     def _index_frames(self, path: Path, asset) -> None:

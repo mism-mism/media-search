@@ -37,6 +37,7 @@ services:
       context: .
       args:
         INSTALL_SEMANTIC: "1"
+        INSTALL_GCP: "0"
     ports:
       - "8000:8000"
     environment:

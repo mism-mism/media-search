@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from media_search.adapters.local_media_storage import LocalMediaStorage
 from media_search.adapters.media_probe import LocalMediaProbe, probe_video
 from media_search.adapters.memory_store import InMemoryMetadataRepository, InMemoryVectorSearch
 from media_search.application.frame_paths import frame_cache_path
@@ -49,7 +50,7 @@ def test_short_video_imports_one_frame(tmp_path: Path):
     work = tmp_path / "work"
     summary = ImportDirectory(
         embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe(), work_dir=work
-    ).execute(incoming)
+    ).execute_storage(LocalMediaStorage(incoming))
     assert summary.imported == ["short.mp4"]
     # one frame key present in vector store
     assert len(vectors._frames) == 1
@@ -64,5 +65,5 @@ def test_long_video_imports_three_frames(tmp_path: Path):
     vectors = InMemoryVectorSearch()
     ImportDirectory(
         embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe(), work_dir=tmp_path / "work"
-    ).execute(incoming)
+    ).execute_storage(LocalMediaStorage(incoming))
     assert len(vectors._frames) == 3

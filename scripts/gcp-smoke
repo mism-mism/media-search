@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Deployed URL smoke for Feature 002.
+# Usage: BASE_URL=https://... ./scripts/gcp-smoke
+set -euo pipefail
+
+BASE_URL="${BASE_URL:?set BASE_URL to Cloud Run URL}"
+BASE_URL="${BASE_URL%/}"
+
+echo "=== health ==="
+curl -fsS "$BASE_URL/health" | tee /tmp/media-search-health.json
+echo
+
+echo "=== search smoke ==="
+code="$(curl -sS -o /tmp/media-search-search.json -w '%{http_code}' \
+  "$BASE_URL/api/search?q=a%20bright%20red%20circle&top_k=5")"
+echo "HTTP $code"
+cat /tmp/media-search-search.json
+echo
+if [[ "$code" != "200" ]]; then
+  echo "FAIL: search expected 200" >&2
+  exit 1
+fi
+echo "PASS: gcp smoke"

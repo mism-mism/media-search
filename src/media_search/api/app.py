@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from media_search.adapters.local_media_storage import LocalMediaStorage
 from media_search.application.frame_paths import frame_cache_path
 from media_search.application.import_directory import ImportDirectory, ImportSummary
 from media_search.application.search_media import EmptyQueryError, SearchMediaAssets
 from media_search.domain.media_asset import MediaType
+from media_search.ports.media_storage import MediaStoragePort
 from media_search.ports.search import MetadataRepositoryPort, SearchQuery
 
 
@@ -141,10 +144,16 @@ def create_app(
     importer: ImportDirectory | None = None,
     metadata: MetadataRepositoryPort | None = None,
     media_root: Path | None = None,
+    media_storage: MediaStoragePort | None = None,
     frame_root: Path | None = None,
+    on_after_import: Callable[[], None] | None = None,
     embedder_mode: str = "unknown",
     embedder_id: str = "unknown",
 ) -> FastAPI:
+    storage = media_storage
+    if storage is None and media_root is not None:
+        storage = LocalMediaStorage(media_root)
+
     app = FastAPI(title="media-search", version="0.1.0")
 
     @app.get("/", response_class=HTMLResponse)
@@ -199,14 +208,32 @@ def create_app(
         return SearchResponse(results=results)
 
     @app.post("/api/import", response_model=ImportResponse)
-    def api_import(path: str = Query(..., description="Import directory path")) -> ImportResponse:
+    def api_import(
+        path: str = Query(
+            default="",
+            description="Local import directory; empty uses configured media storage",
+        ),
+    ) -> ImportResponse:
         if importer is None:
             raise HTTPException(status_code=501, detail="import not configured")
-        root = Path(path)
         try:
-            summary: ImportSummary = importer.execute(root)
+            if path.strip():
+                from media_search.adapters.local_media_storage import LocalMediaStorage
+
+                root = Path(path)
+                if not root.is_dir():
+                    raise FileNotFoundError(f"import root not found: {root}")
+                summary = importer.execute_storage(LocalMediaStorage(root))
+            else:
+                if storage is None:
+                    raise HTTPException(
+                        status_code=400, detail="path required when media storage unset"
+                    )
+                summary = importer.execute_storage(storage)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if on_after_import is not None:
+            on_after_import()
         return ImportResponse(
             imported=summary.imported,
             updated=summary.updated,
@@ -236,21 +263,23 @@ def create_app(
         )
 
     @app.get("/media/{asset_id:path}")
-    def media_file(asset_id: str) -> FileResponse:
-        if media_root is None or metadata is None:
+    def media_file(asset_id: str):
+        if storage is None or metadata is None:
             raise HTTPException(status_code=501, detail="media not configured")
         asset = metadata.get(asset_id)
         if asset is None:
             raise HTTPException(status_code=404, detail="asset not found")
-        root = media_root.resolve()
-        path = (root / asset_id).resolve()
-        try:
-            path.relative_to(root)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="invalid asset path") from exc
-        if not path.is_file():
+        if not storage.exists(asset_id):
             raise HTTPException(status_code=404, detail="media file missing")
-        return FileResponse(path, media_type=asset.mime_type)
+        try:
+            # Reject traversal-style keys before streaming.
+            parts = [p for p in asset_id.replace("\\", "/").split("/") if p]
+            if any(p == ".." for p in parts):
+                raise HTTPException(status_code=400, detail="invalid asset path")
+        except HTTPException:
+            raise
+        stream = storage.open_stream(asset_id)
+        return StreamingResponse(stream, media_type=asset.mime_type)
 
     @app.get("/thumbnails/{frame_key:path}")
     def thumbnail_file(frame_key: str) -> FileResponse:

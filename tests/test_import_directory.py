@@ -8,6 +8,7 @@ from media_search.adapters.sqlite_store import (
     SqliteVecSearch,
     open_db,
 )
+from media_search.adapters.local_media_storage import LocalMediaStorage
 from media_search.adapters.media_probe import LocalMediaProbe
 from media_search.application.import_directory import ImportDirectory
 from media_search.application.search_media import SearchMediaAssets
@@ -31,7 +32,7 @@ def test_import_skips_unsupported_and_imports_png(tmp_path: Path):
     vectors = InMemoryVectorSearch()
     summary = ImportDirectory(
         embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe()
-    ).execute(incoming)
+    ).execute_storage(LocalMediaStorage(incoming))
 
     assert summary.imported == ["ok.png"]
     assert any(s.reason == "unsupported format" for s in summary.skipped)
@@ -45,8 +46,8 @@ def test_reimport_is_upsert(tmp_path: Path):
     meta = InMemoryMetadataRepository()
     vectors = InMemoryVectorSearch()
     importer = ImportDirectory(embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe())
-    first = importer.execute(incoming)
-    second = importer.execute(incoming)
+    first = importer.execute_storage(LocalMediaStorage(incoming))
+    second = importer.execute_storage(LocalMediaStorage(incoming))
     assert first.imported == ["a.png"]
     assert second.updated == ["a.png"]
     assert second.imported == []
@@ -63,7 +64,7 @@ def test_sidecar_tags(tmp_path: Path):
     embedder = FakeEmbedder()
     meta = InMemoryMetadataRepository()
     vectors = InMemoryVectorSearch()
-    ImportDirectory(embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe()).execute(incoming)
+    ImportDirectory(embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe()).execute_storage(LocalMediaStorage(incoming))
     asset = meta.get("tagged.png")
     assert asset is not None
     assert asset.tags == ["ad", "cosmetics"]
@@ -77,7 +78,7 @@ def test_sqlite_vec_import_and_search(tmp_path: Path):
     embedder = FakeEmbedder(dimension=32)
     meta = SqliteMetadataRepository(db)
     vectors = SqliteVecSearch(db, dimension=32)
-    ImportDirectory(embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe()).execute(incoming)
+    ImportDirectory(embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe()).execute_storage(LocalMediaStorage(incoming))
 
     # Rank by planting query vector equal to stored image vector
     asset = meta.get("hit.png")
