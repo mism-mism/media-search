@@ -13,6 +13,9 @@ def run_worker(job_id: str | None = None) -> int:
     from media_search.main import build_runtime
 
     rt = build_runtime()
+    warm = getattr(rt.search, "warm", None)
+    if callable(warm):
+        warm()
     holder = f"worker:{job_id or 'adhoc'}"
     store = rt.job_store
     lock = rt.import_lock

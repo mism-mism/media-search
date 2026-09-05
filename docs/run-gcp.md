@@ -75,9 +75,12 @@ make deploy
 
 Or GitHub Actions → **deploy-gcp** → Run workflow → enter `project_id` / `region` / tag.
 
-The workflow builds with `INSTALL_SEMANTIC=1`, `INSTALL_GCP=1`, and
+The workflow / `make deploy` builds with `INSTALL_SEMANTIC=1`, `INSTALL_GCP=1`, and
 `PREWARM_OPENCLIP=1` (CPU torch wheels — CUDA wheels OOM on Cloud Run), pushes
 to `media-search-repo`, and deploys Cloud Run env for GCS.
+
+Service (009): `--min-instances=1` and `--no-cpu-throttling` keep OpenCLIP warm
+(ongoing cost). Import Job: 4 CPU / 16Gi and `IMPORT_EMBED_WORKERS=4`.
 
 Dockerfile is **multi-stage** (`deps` → `models` → `runtime`): torch/OpenCLIP
 install and HF weight bake are cached unless `pyproject.toml` / embedder code

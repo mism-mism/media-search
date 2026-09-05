@@ -118,14 +118,14 @@ resource "google_cloud_run_v2_service" "app" {
       ports {
         container_port = 8080
       }
-      resources {
-        limits = {
-          cpu    = "2"
-          memory = "8Gi"
+        resources {
+          limits = {
+            cpu    = "2"
+            memory = "8Gi"
+          }
+          cpu_idle          = false
+          startup_cpu_boost = true
         }
-        cpu_idle          = true
-        startup_cpu_boost = true
-      }
       startup_probe {
         http_get {
           path = "/health"
@@ -197,7 +197,7 @@ resource "google_cloud_run_v2_service" "app" {
       }
     }
     scaling {
-      min_instance_count = 0
+      min_instance_count = 1
       max_instance_count = 2
     }
   }
@@ -255,13 +255,17 @@ resource "google_cloud_run_v2_job" "import" {
         command = ["python", "-m", "media_search.worker_import"]
         resources {
           limits = {
-            cpu    = "2"
-            memory = "8Gi"
+            cpu    = "4"
+            memory = "16Gi"
           }
         }
         env {
           name  = "IMPORT_MODE"
           value = "worker"
+        }
+        env {
+          name  = "IMPORT_EMBED_WORKERS"
+          value = "4"
         }
         env {
           name  = "EMBEDDER"

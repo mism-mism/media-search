@@ -126,6 +126,24 @@ class SqliteMetadataRepository:
                 ).fetchall()
         return [_row_to_asset(r) for r in rows]
 
+    def search_text(self, needle: str) -> list[MediaAsset]:
+        n = needle.strip().lower()
+        if not n:
+            return []
+        # Escape LIKE metacharacters; match display_name or tags_json substring.
+        like = "%" + n.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT * FROM assets
+                WHERE lower(display_name) LIKE ? ESCAPE '\\'
+                   OR lower(tags_json) LIKE ? ESCAPE '\\'
+                ORDER BY asset_id
+                """,
+                (like, like),
+            ).fetchall()
+        return [_row_to_asset(r) for r in rows]
+
     def delete(self, asset_id: str) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM assets WHERE asset_id = ?", (asset_id,))

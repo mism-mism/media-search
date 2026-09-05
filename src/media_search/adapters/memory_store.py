@@ -28,6 +28,19 @@ class InMemoryMetadataRepository:
             or (folder_id is not None and a.folder_id == folder_id)
         ]
 
+    def search_text(self, needle: str) -> list[MediaAsset]:
+        n = needle.strip().lower()
+        if not n:
+            return []
+        out: list[MediaAsset] = []
+        for a in self._items.values():
+            if n in (a.display_name or "").lower():
+                out.append(a)
+                continue
+            if any(n in t.lower() for t in a.tags):
+                out.append(a)
+        return out
+
     def delete(self, asset_id: str) -> None:
         self._items.pop(asset_id, None)
 

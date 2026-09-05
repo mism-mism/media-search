@@ -44,10 +44,12 @@ Do **not** develop by deploying to GCP from day one.
 | **001** Local-first Media Asset Search Vertical Slice | Prove semantic search + filters + preview locally | completed |
 | **002** `gcp-deployment` | Cloud Run + GCS; OpenCLIP + sqlite-vec; Terraform + CD | completed |
 | **003** `iap-access` | IAP (External + Gmail allowlist) before production | completed |
-| **004** | Vertex embeddings eval — no-go cutover; OpenCLIP remains default | draft / PR |
-| **005** `scale-media-ingest` | ~10k image+video; team UI → Cloud Run Job; GCS thumbs; sqlite single-writer | active (implemented on branch) |
-| **006** `media-library` | Virtual folders + upload/manage + colocated search | active |
-| **007** `product-search-api` | Product name + similar-image search API (hybrid SKU) | active |
+| **004** | Vertex embeddings eval — no-go cutover; OpenCLIP remains default | completed (branch) |
+| **005** `scale-media-ingest` | ~10k image+video; team UI → Cloud Run Job; GCS thumbs; sqlite single-writer | completed |
+| **006** `media-library` | Virtual folders + upload/manage + colocated search | completed |
+| **007** `product-search-api` | Product name + similar-image search API (hybrid SKU) | completed |
+| **008** `sku-product-embedder-eval` | Eval product/SKU retrieval embedders vs OpenCLIP | draft |
+| **009** `search-index-performance` | Warm search + Import indexing speed | active |
 
 Rules:
 
