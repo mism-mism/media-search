@@ -30,7 +30,8 @@ class SqliteMetadataRepository:
                   tags_json TEXT NOT NULL,
                   description TEXT NOT NULL,
                   display_name TEXT NOT NULL DEFAULT '',
-                  folder_id TEXT
+                  folder_id TEXT,
+                  product_id TEXT
                 )
                 """
             )
@@ -44,6 +45,8 @@ class SqliteMetadataRepository:
                 )
             if "folder_id" not in cols:
                 self._conn.execute("ALTER TABLE assets ADD COLUMN folder_id TEXT")
+            if "product_id" not in cols:
+                self._conn.execute("ALTER TABLE assets ADD COLUMN product_id TEXT")
             self._conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS folders (
@@ -61,8 +64,9 @@ class SqliteMetadataRepository:
                 """
                 INSERT INTO assets(
                   asset_id, media_type, mime_type, size_bytes, width, height,
-                  duration_seconds, tags_json, description, display_name, folder_id
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                  duration_seconds, tags_json, description, display_name, folder_id,
+                  product_id
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(asset_id) DO UPDATE SET
                   media_type=excluded.media_type,
                   mime_type=excluded.mime_type,
@@ -73,7 +77,8 @@ class SqliteMetadataRepository:
                   tags_json=excluded.tags_json,
                   description=excluded.description,
                   display_name=excluded.display_name,
-                  folder_id=excluded.folder_id
+                  folder_id=excluded.folder_id,
+                  product_id=excluded.product_id
                 """,
                 (
                     asset.asset_id,
@@ -87,6 +92,7 @@ class SqliteMetadataRepository:
                     asset.description,
                     asset.display_name or asset.asset_id,
                     asset.folder_id,
+                    asset.product_id,
                 ),
             )
             self._conn.commit()
@@ -221,6 +227,7 @@ def _row_to_asset(row: sqlite3.Row) -> MediaAsset:
     keys = row.keys()
     display = row["display_name"] if "display_name" in keys else ""
     folder_id = row["folder_id"] if "folder_id" in keys else None
+    product_id = row["product_id"] if "product_id" in keys else None
     return MediaAsset(
         asset_id=row["asset_id"],
         media_type=MediaType(row["media_type"]),
@@ -233,6 +240,7 @@ def _row_to_asset(row: sqlite3.Row) -> MediaAsset:
         description=row["description"] or "",
         display_name=display or row["asset_id"],
         folder_id=folder_id,
+        product_id=product_id,
     )
 
 

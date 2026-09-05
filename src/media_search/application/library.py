@@ -57,6 +57,9 @@ class LibraryService:
     def list_folders(self, parent_id: str | None = None) -> list[Folder]:
         return self._folders.list_children(parent_id)
 
+    def list_all_folders(self) -> list[Folder]:
+        return self._folders.list_all()
+
     def create_folder(self, *, name: str, parent_id: str | None = None) -> Folder:
         name = name.strip()
         if not name:
@@ -82,6 +85,7 @@ class LibraryService:
         data: bytes,
         folder_id: str | None = None,
         content_type: str | None = None,
+        enqueue: bool = True,
     ) -> tuple[MediaAsset, ImportJobRecord | None]:
         kind_s = classify_path(Path(filename))
         if kind_s is None:
@@ -104,9 +108,33 @@ class LibraryService:
         self._metadata.upsert(asset)
         self._persist()
         job = None
-        if self._import_jobs is not None:
+        if enqueue and self._import_jobs is not None:
             job = self._import_jobs.enqueue()
         return asset, job
+
+    def upload_many(
+        self,
+        *,
+        items: list[tuple[str, bytes, str | None]],
+        folder_id: str | None = None,
+    ) -> tuple[list[MediaAsset], ImportJobRecord | None]:
+        """Store many files, then enqueue a single Import job."""
+        if not items:
+            raise ValueError("no files")
+        assets: list[MediaAsset] = []
+        for filename, data, content_type in items:
+            asset, _ = self.upload(
+                filename=filename,
+                data=data,
+                folder_id=folder_id,
+                content_type=content_type,
+                enqueue=False,
+            )
+            assets.append(asset)
+        job = None
+        if self._import_jobs is not None:
+            job = self._import_jobs.enqueue()
+        return assets, job
 
     def rename(self, asset_id: str, display_name: str) -> MediaAsset:
         asset = self._require(asset_id)
@@ -123,6 +151,16 @@ class LibraryService:
         if folder_id is not None and self._folders.get(folder_id) is None:
             raise FileNotFoundError("folder not found")
         asset = replace(asset, folder_id=folder_id)
+        self._metadata.upsert(asset)
+        self._persist()
+        return asset
+
+    def set_product_id(self, asset_id: str, product_id: str | None) -> MediaAsset:
+        asset = self._require(asset_id)
+        pid = product_id.strip() if product_id else None
+        if pid == "":
+            pid = None
+        asset = replace(asset, product_id=pid)
         self._metadata.upsert(asset)
         self._persist()
         return asset

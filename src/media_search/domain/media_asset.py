@@ -25,6 +25,7 @@ class MediaAsset:
     description: str = ""
     display_name: str = ""
     folder_id: Optional[str] = None
+    product_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -39,3 +40,4 @@ class AssetSearchHit:
     asset: MediaAsset
     score: float
     best_frame: Optional[FrameHit] = None
+    match_kinds: tuple[str, ...] = ()

@@ -139,6 +139,23 @@ def test_library_folder_upload_move_rename_delete(tmp_path: Path):
     assert client.get(f"/api/assets/{asset_id}").status_code == 404
 
 
+def test_library_multi_upload_one_job(tmp_path: Path):
+    client, _ = _client(tmp_path)
+    paths = []
+    for i, color in enumerate([(10, 20, 30), (40, 50, 60), (70, 80, 90)]):
+        p = tmp_path / f"n{i}.png"
+        Image.new("RGB", (8, 8), color).save(p)
+        paths.append(p)
+    files = [("files", (p.name, p.read_bytes(), "image/png")) for p in paths]
+    up = client.post("/api/library/upload", files=files)
+    assert up.status_code == 200, up.text
+    body = up.json()
+    assert len(body["assets"]) == 3
+    assert body["job"]["status"] == "succeeded"
+    all_assets = client.get("/api/library/folders", params={"all": "1"}).json()
+    assert "folders" in all_assets
+
+
 def test_sqlite_folder_repo(tmp_path: Path):
     conn = open_db(tmp_path / "t.db")
     # Ensure assets table exists for empty-folder checks.

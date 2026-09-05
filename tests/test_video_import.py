@@ -48,8 +48,16 @@ def test_short_video_imports_one_frame(tmp_path: Path):
     meta = InMemoryMetadataRepository()
     vectors = InMemoryVectorSearch()
     work = tmp_path / "work"
+    from media_search.adapters.local_frame_store import LocalFrameStore
+
+    frames = LocalFrameStore(work / "frames")
     summary = ImportDirectory(
-        embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe(), work_dir=work
+        embedder=embedder,
+        vectors=vectors,
+        metadata=meta,
+        media_probe=LocalMediaProbe(),
+        work_dir=work,
+        frame_store=frames,
     ).execute_storage(LocalMediaStorage(incoming))
     assert summary.imported == ["short.mp4"]
     # one frame key present in vector store
@@ -63,7 +71,15 @@ def test_long_video_imports_three_frames(tmp_path: Path):
     embedder = FakeEmbedder()
     meta = InMemoryMetadataRepository()
     vectors = InMemoryVectorSearch()
+    from media_search.adapters.local_frame_store import LocalFrameStore
+
+    work = tmp_path / "work"
     ImportDirectory(
-        embedder=embedder, vectors=vectors, metadata=meta, media_probe=LocalMediaProbe(), work_dir=tmp_path / "work"
+        embedder=embedder,
+        vectors=vectors,
+        metadata=meta,
+        media_probe=LocalMediaProbe(),
+        work_dir=work,
+        frame_store=LocalFrameStore(work / "frames"),
     ).execute_storage(LocalMediaStorage(incoming))
     assert len(vectors._frames) == 3

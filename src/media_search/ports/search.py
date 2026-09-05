@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Protocol, Sequence
 
-from media_search.domain.media_asset import AssetSearchHit, MediaAsset, MediaType
+from media_search.domain.media_asset import MediaAsset, MediaType
 
 
 @dataclass(frozen=True)
@@ -12,6 +12,16 @@ class SearchQuery:
     media_type: Optional[MediaType] = None
     tags: tuple[str, ...] = ()
     top_k: int = 5
+    product_id: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ImageSearchQuery:
+    image_bytes: bytes
+    media_type: Optional[MediaType] = None
+    tags: tuple[str, ...] = ()
+    top_k: int = 5
+    product_id: Optional[str] = None
 
 
 class VectorSearchPort(Protocol):

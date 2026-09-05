@@ -79,6 +79,10 @@ The workflow builds with `INSTALL_SEMANTIC=1`, `INSTALL_GCP=1`, and
 `PREWARM_OPENCLIP=1` (CPU torch wheels — CUDA wheels OOM on Cloud Run), pushes
 to `media-search-repo`, and deploys Cloud Run env for GCS.
 
+Dockerfile is **multi-stage** (`deps` → `models` → `runtime`): torch/OpenCLIP
+install and HF weight bake are cached unless `pyproject.toml` / embedder code
+changes, so app-only edits rebuild much faster.
+
 ## 3. Upload media + import
 
 ```bash

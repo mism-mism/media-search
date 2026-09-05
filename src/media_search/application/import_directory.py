@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from media_search.adapters.local_frame_store import LocalFrameStore
 from media_search.domain.formats import classify_path
 from media_search.domain.frames import (
     MAX_REPRESENTATIVE_FRAMES,
@@ -49,12 +48,7 @@ class ImportDirectory:
         self._metadata = metadata
         self._media_probe = media_probe
         self._work_dir = work_dir
-        if frame_store is not None:
-            self._frame_store = frame_store
-        elif work_dir is not None:
-            self._frame_store = LocalFrameStore(work_dir / "frames")
-        else:
-            self._frame_store = None
+        self._frame_store = frame_store
 
     def execute_storage(
         self,
@@ -107,6 +101,7 @@ class ImportDirectory:
                                 display_name=existed.display_name or Path(key).name,
                                 tags=existed.tags or asset.tags,
                                 description=existed.description or asset.description,
+                                product_id=existed.product_id or asset.product_id,
                             )
                         else:
                             asset = replace(asset, display_name=Path(key).name)
@@ -147,34 +142,28 @@ class ImportDirectory:
         duration = float(asset.duration_seconds or 0.0)
         positions = [s.position for s in representative_frame_positions(duration)]
         store = self._frame_store
-        tmp_root: Path | None = None
-        if store is None:
-            tmp_root = Path(tempfile.mkdtemp())
-            store = LocalFrameStore(tmp_root)
-        try:
+        if store is not None:
             store.delete_prefix(asset.asset_id, max_frames=MAX_REPRESENTATIVE_FRAMES)
-            for i, pos in enumerate(positions):
-                frame_key = f"{asset.asset_id}::{i}"
-                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                    dest = Path(tmp.name)
-                try:
-                    self._media_probe.extract_frame_jpeg(
-                        path,
-                        position=pos,
-                        duration_seconds=duration,
-                        dest=dest,
-                    )
-                    jpeg = dest.read_bytes()
+        for i, pos in enumerate(positions):
+            frame_key = f"{asset.asset_id}::{i}"
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                dest = Path(tmp.name)
+            try:
+                self._media_probe.extract_frame_jpeg(
+                    path,
+                    position=pos,
+                    duration_seconds=duration,
+                    dest=dest,
+                )
+                jpeg = dest.read_bytes()
+                if store is not None:
                     store.put_jpeg(frame_key, jpeg)
-                    vec = self._embedder.embed_image(jpeg)
-                    self._vectors.upsert_frame(
-                        asset_id=asset.asset_id,
-                        frame_key=frame_key,
-                        position=pos,
-                        vector=vec.tolist(),
-                    )
-                finally:
-                    dest.unlink(missing_ok=True)
-        finally:
-            if tmp_root is not None:
-                shutil.rmtree(tmp_root, ignore_errors=True)
+                vec = self._embedder.embed_image(jpeg)
+                self._vectors.upsert_frame(
+                    asset_id=asset.asset_id,
+                    frame_key=frame_key,
+                    position=pos,
+                    vector=vec.tolist(),
+                )
+            finally:
+                dest.unlink(missing_ok=True)

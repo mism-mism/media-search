@@ -13,12 +13,13 @@ REPO     := $(REGION)-docker.pkg.dev/$(PROJECT)/media-search-repo
 IMAGE    := $(REPO)/media-search:$(IMAGE_TAG)
 BUCKET   := media-search-$(PROJECT)-media
 
-.PHONY: help test deploy
+.PHONY: help test deploy docker-prune
 
 help:
-	@echo "make test    # pytest (uses .venv if present)"
-	@echo "make deploy  # amd64 build → push → Cloud Run service + import Job"
-	@echo "             # optional: make deploy IMAGE_TAG=005-006"
+	@echo "make test          # pytest (uses .venv if present)"
+	@echo "make deploy        # amd64 build → push → Cloud Run service + import Job"
+	@echo "make docker-prune  # free Docker disk (fixes 'No space left on device')"
+	@echo "                   # optional: make deploy IMAGE_TAG=005-006"
 
 test:
 	@if [ -x .venv/bin/python ]; then \
@@ -27,10 +28,15 @@ test:
 	  python3 -m pytest -q; \
 	fi
 
+docker-prune:
+	docker builder prune -af
+	docker image prune -af
+	@docker system df
+
 deploy:
 	@set -euo pipefail; \
 	gcloud auth configure-docker "$(REGION)-docker.pkg.dev" --quiet; \
-	docker build --platform linux/amd64 \
+	DOCKER_BUILDKIT=1 docker build --platform linux/amd64 \
 	  --build-arg INSTALL_SEMANTIC=1 \
 	  --build-arg INSTALL_GCP=1 \
 	  --build-arg PREWARM_OPENCLIP=1 \
