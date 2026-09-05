@@ -1,6 +1,6 @@
 ---
 id: "001"
-status: active
+status: completed
 profile: full
 profile_reason: "First product Architecture feature — establishes Domain ports, Local adapters, API/container boundaries, and future GCP swap seams."
 ---
