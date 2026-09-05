@@ -44,7 +44,7 @@ None.
 
 ## Residual (non-blocking; do not overturn PASS)
 
-1. AC9 human “usable” judgment remains OPEN (`product.md`) — human Outer step.
+1. AC9 human “usable” judgment **PASS** (`product.md` + clarify D7; operator session 2026-09-05).
 2. Test residuals: `mediaType` filter unit coverage; Docker E2E not in default
    verify (`test.md`).
 3. Doc drift: clarify/spec OpenCLIP `openai` wording vs runtime
