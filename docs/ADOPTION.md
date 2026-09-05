@@ -48,6 +48,10 @@ provenance (CONSTITUTION, ADR, REFERENCES).
 ## Initialize Product / Domain
 
 After adopt:
+- Template dogfood `specs/001–007` are gone. A PR that deletes them (adoption
+  commit) must not fail pre-merge for “missing specs/…/spec.md”; only **live**
+  features with `specs/<feat>/spec.md` are gated (`resolve-features.sh`).
+- Continue with PRODUCT/DOMAIN and `./scripts/new-feature`.
 
 1. Edit `docs/PRODUCT.md`
 2. Edit `docs/DOMAIN.md` and `docs/GLOSSARY.md`

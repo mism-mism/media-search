@@ -20,6 +20,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install product test dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          python3 -m pip install -U pip
+          python3 -m pip install -e ".[dev]"
       - name: Resolve base/head and run pre-merge
         env:
           MAIN_BRANCH: main
