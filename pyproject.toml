@@ -26,6 +26,10 @@ dev = [
 gcp = [
   "google-cloud-storage>=2.16.0",
 ]
+vertex = [
+  "google-genai>=1.0.0",
+  "google-cloud-aiplatform>=1.60.0",
+]
 semantic = [
   "open-clip-torch>=2.24.0",
   "torch>=2.2.0",

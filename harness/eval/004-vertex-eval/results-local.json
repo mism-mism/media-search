@@ -1,0 +1,434 @@
+{
+  "embedder": "local",
+  "model_id": "open_clip:xlm-roberta-base-ViT-B-32/laion5b_s13b_b90k",
+  "dimension": 512,
+  "corpus": "/Users/masami/Code/ai/media-search/data/corpus-web",
+  "imported": [
+    "01-cat.jpg",
+    "02-dog.jpg",
+    "03-beach.jpg",
+    "04-mountain.jpg",
+    "05-forest.jpg",
+    "06-city.jpg",
+    "07-flower.jpg",
+    "08-sunset.jpg",
+    "09-lake.jpg",
+    "10-bridge.jpg",
+    "12-desert.jpg",
+    "13-bird.jpg",
+    "14-boat.jpg",
+    "16-food.jpg",
+    "17-car.jpg",
+    "18-kitchen.jpg",
+    "19-park.jpg",
+    "20-market.jpg"
+  ],
+  "import_seconds": 0.762,
+  "search_seconds_total": 0.64,
+  "hit1": 18,
+  "hit1_total": 20,
+  "hit1_rate": 0.9,
+  "api_calls": null,
+  "queries": [
+    {
+      "id": "en01",
+      "q": "a cat",
+      "expected_hint": "01-cat",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "01-cat.jpg",
+          "score": 0.2450966238975525
+        },
+        {
+          "asset_id": "02-dog.jpg",
+          "score": 0.13328295946121216
+        },
+        {
+          "asset_id": "10-bridge.jpg",
+          "score": 0.10852700471878052
+        }
+      ]
+    },
+    {
+      "id": "en02",
+      "q": "a dog",
+      "expected_hint": "02-dog",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "02-dog.jpg",
+          "score": 0.22370761632919312
+        },
+        {
+          "asset_id": "01-cat.jpg",
+          "score": 0.16520416736602783
+        },
+        {
+          "asset_id": "10-bridge.jpg",
+          "score": 0.11091554164886475
+        }
+      ]
+    },
+    {
+      "id": "en03",
+      "q": "sandy beach ocean",
+      "expected_hint": "03-beach",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "03-beach.jpg",
+          "score": 0.24714869260787964
+        },
+        {
+          "asset_id": "10-bridge.jpg",
+          "score": 0.14409953355789185
+        },
+        {
+          "asset_id": "09-lake.jpg",
+          "score": 0.12536001205444336
+        }
+      ]
+    },
+    {
+      "id": "en04",
+      "q": "red sports car",
+      "expected_hint": "17-car",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "17-car.jpg",
+          "score": 0.14113503694534302
+        },
+        {
+          "asset_id": "10-bridge.jpg",
+          "score": 0.13129937648773193
+        },
+        {
+          "asset_id": "19-park.jpg",
+          "score": 0.08693802356719971
+        }
+      ]
+    },
+    {
+      "id": "en05",
+      "q": "plate of food",
+      "expected_hint": "16-food",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "16-food.jpg",
+          "score": 0.200206458568573
+        },
+        {
+          "asset_id": "18-kitchen.jpg",
+          "score": 0.14437782764434814
+        },
+        {
+          "asset_id": "20-market.jpg",
+          "score": 0.10544246435165405
+        }
+      ]
+    },
+    {
+      "id": "en06",
+      "q": "mountain landscape",
+      "expected_hint": "04-mountain",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "04-mountain.jpg",
+          "score": 0.22720837593078613
+        },
+        {
+          "asset_id": "08-sunset.jpg",
+          "score": 0.20773983001708984
+        },
+        {
+          "asset_id": "12-desert.jpg",
+          "score": 0.1687324047088623
+        }
+      ]
+    },
+    {
+      "id": "en07",
+      "q": "kitchen interior",
+      "expected_hint": "18-kitchen",
+      "hit1_ok": false,
+      "top_k": [
+        {
+          "asset_id": "20-market.jpg",
+          "score": 0.19699466228485107
+        },
+        {
+          "asset_id": "18-kitchen.jpg",
+          "score": 0.1708366870880127
+        },
+        {
+          "asset_id": "17-car.jpg",
+          "score": 0.1273626685142517
+        }
+      ]
+    },
+    {
+      "id": "en08",
+      "q": "desert sand dunes",
+      "expected_hint": "12-desert",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "12-desert.jpg",
+          "score": 0.1942610740661621
+        },
+        {
+          "asset_id": "03-beach.jpg",
+          "score": 0.17106378078460693
+        },
+        {
+          "asset_id": "04-mountain.jpg",
+          "score": 0.14112216234207153
+        }
+      ]
+    },
+    {
+      "id": "en09",
+      "q": "bridge over water",
+      "expected_hint": "10-bridge",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "10-bridge.jpg",
+          "score": 0.23446571826934814
+        },
+        {
+          "asset_id": "09-lake.jpg",
+          "score": 0.21703660488128662
+        },
+        {
+          "asset_id": "14-boat.jpg",
+          "score": 0.13192999362945557
+        }
+      ]
+    },
+    {
+      "id": "en10",
+      "q": "colorful flower",
+      "expected_hint": "07-flower",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "07-flower.jpg",
+          "score": 0.2004755139350891
+        },
+        {
+          "asset_id": "13-bird.jpg",
+          "score": 0.11474919319152832
+        },
+        {
+          "asset_id": "03-beach.jpg",
+          "score": 0.08774352073669434
+        }
+      ]
+    },
+    {
+      "id": "ja01",
+      "q": "猫",
+      "expected_hint": "01-cat",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "01-cat.jpg",
+          "score": 0.24678903818130493
+        },
+        {
+          "asset_id": "02-dog.jpg",
+          "score": 0.12001603841781616
+        },
+        {
+          "asset_id": "07-flower.jpg",
+          "score": 0.08584457635879517
+        }
+      ]
+    },
+    {
+      "id": "ja02",
+      "q": "犬",
+      "expected_hint": "02-dog",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "02-dog.jpg",
+          "score": 0.2285681962966919
+        },
+        {
+          "asset_id": "01-cat.jpg",
+          "score": 0.1644653081893921
+        },
+        {
+          "asset_id": "13-bird.jpg",
+          "score": 0.07963311672210693
+        }
+      ]
+    },
+    {
+      "id": "ja03",
+      "q": "砂浜",
+      "expected_hint": "03-beach",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "03-beach.jpg",
+          "score": 0.21219992637634277
+        },
+        {
+          "asset_id": "02-dog.jpg",
+          "score": 0.11561566591262817
+        },
+        {
+          "asset_id": "07-flower.jpg",
+          "score": 0.11024904251098633
+        }
+      ]
+    },
+    {
+      "id": "ja04",
+      "q": "赤い車",
+      "expected_hint": "17-car",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "17-car.jpg",
+          "score": 0.12946003675460815
+        },
+        {
+          "asset_id": "10-bridge.jpg",
+          "score": 0.11031651496887207
+        },
+        {
+          "asset_id": "19-park.jpg",
+          "score": 0.09224814176559448
+        }
+      ]
+    },
+    {
+      "id": "ja05",
+      "q": "料理",
+      "expected_hint": "16-food",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "16-food.jpg",
+          "score": 0.17332696914672852
+        },
+        {
+          "asset_id": "18-kitchen.jpg",
+          "score": 0.15214359760284424
+        },
+        {
+          "asset_id": "20-market.jpg",
+          "score": 0.13454830646514893
+        }
+      ]
+    },
+    {
+      "id": "ja06",
+      "q": "山の景色",
+      "expected_hint": "04-mountain",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "04-mountain.jpg",
+          "score": 0.18846380710601807
+        },
+        {
+          "asset_id": "08-sunset.jpg",
+          "score": 0.18426507711410522
+        },
+        {
+          "asset_id": "19-park.jpg",
+          "score": 0.15021252632141113
+        }
+      ]
+    },
+    {
+      "id": "ja07",
+      "q": "キッチン",
+      "expected_hint": "18-kitchen",
+      "hit1_ok": false,
+      "top_k": [
+        {
+          "asset_id": "20-market.jpg",
+          "score": 0.13086289167404175
+        },
+        {
+          "asset_id": "18-kitchen.jpg",
+          "score": 0.12595385313034058
+        },
+        {
+          "asset_id": "16-food.jpg",
+          "score": 0.09841668605804443
+        }
+      ]
+    },
+    {
+      "id": "ja08",
+      "q": "砂漠",
+      "expected_hint": "12-desert",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "12-desert.jpg",
+          "score": 0.19099444150924683
+        },
+        {
+          "asset_id": "03-beach.jpg",
+          "score": 0.15086346864700317
+        },
+        {
+          "asset_id": "07-flower.jpg",
+          "score": 0.11876213550567627
+        }
+      ]
+    },
+    {
+      "id": "ja09",
+      "q": "橋",
+      "expected_hint": "10-bridge",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "10-bridge.jpg",
+          "score": 0.18923592567443848
+        },
+        {
+          "asset_id": "09-lake.jpg",
+          "score": 0.14602261781692505
+        },
+        {
+          "asset_id": "19-park.jpg",
+          "score": 0.11952263116836548
+        }
+      ]
+    },
+    {
+      "id": "ja10",
+      "q": "花",
+      "expected_hint": "07-flower",
+      "hit1_ok": true,
+      "top_k": [
+        {
+          "asset_id": "07-flower.jpg",
+          "score": 0.20563793182373047
+        },
+        {
+          "asset_id": "01-cat.jpg",
+          "score": 0.11491268873214722
+        },
+        {
+          "asset_id": "02-dog.jpg",
+          "score": 0.10423481464385986
+        }
+      ]
+    }
+  ]
+}

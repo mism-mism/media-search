@@ -28,6 +28,11 @@ def _build_embedder():
 
         # Lazy: Cloud Run must listen on PORT before HF/OpenCLIP download.
         return name, LazyOpenClipEmbedder()
+    if name == "vertex":
+        from media_search.adapters.vertex_embedder import get_shared_vertex_embedder
+
+        # Eval / spike only — not the production default (clarify D5).
+        return name, get_shared_vertex_embedder()
     raise SystemExit(f"unsupported EMBEDDER={name!r}")
 
 

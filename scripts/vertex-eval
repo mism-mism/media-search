@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""004 Vertex eval harness: OpenCLIP baseline vs Vertex embeddings (+ sqlite-vec).
+
+Usage:
+  # baseline only
+  EMBEDDER_PASS=local ./scripts/vertex-eval
+
+  # vertex pass (needs ADC + Vertex API; spend ceiling ~ few USD)
+  EMBEDDER_PASS=vertex VERTEX_PROJECT=laperm-507708 ./scripts/vertex-eval
+
+  # both
+  ./scripts/vertex-eval --both
+
+Writes JSON under harness/eval/004-vertex-eval/.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+QUERIES = [
+    ("en01", "a cat", "01-cat"),
+    ("en02", "a dog", "02-dog"),
+    ("en03", "sandy beach ocean", "03-beach"),
+    ("en04", "red sports car", "17-car"),
+    ("en05", "plate of food", "16-food"),
+    ("en06", "mountain landscape", "04-mountain"),
+    ("en07", "kitchen interior", "18-kitchen"),
+    ("en08", "desert sand dunes", "12-desert"),
+    ("en09", "bridge over water", "10-bridge"),
+    ("en10", "colorful flower", "07-flower"),
+    ("ja01", "猫", "01-cat"),
+    ("ja02", "犬", "02-dog"),
+    ("ja03", "砂浜", "03-beach"),
+    ("ja04", "赤い車", "17-car"),
+    ("ja05", "料理", "16-food"),
+    ("ja06", "山の景色", "04-mountain"),
+    ("ja07", "キッチン", "18-kitchen"),
+    ("ja08", "砂漠", "12-desert"),
+    ("ja09", "橋", "10-bridge"),
+    ("ja10", "花", "07-flower"),
+]
+
+
+def _corpus_dir() -> Path:
+    env = os.environ.get("MEDIA_SEARCH_MEDIA_ROOT")
+    if env:
+        return Path(env).resolve()
+    candidates = [
+        ROOT / "data" / "corpus-web",
+        Path("/Users/masami/Code/ai/media-search/data/corpus-web"),
+    ]
+    for c in candidates:
+        if c.is_dir() and any(c.glob("*.jpg")):
+            return c
+    raise SystemExit("corpus not found; set MEDIA_SEARCH_MEDIA_ROOT")
+
+
+def _build_embedder(name: str):
+    if name == "local":
+        from media_search.adapters.openclip_embedder import get_shared_openclip_embedder
+
+        return get_shared_openclip_embedder()
+    if name == "vertex":
+        from media_search.adapters.vertex_embedder import VertexEmbedder
+
+        return VertexEmbedder()
+    raise SystemExit(f"unknown pass {name}")
+
+
+def run_pass(*, name: str, corpus: Path, out_dir: Path) -> dict:
+    from media_search.adapters.local_media_storage import LocalMediaStorage
+    from media_search.adapters.media_probe import LocalMediaProbe
+    from media_search.adapters.sqlite_store import (
+        SqliteMetadataRepository,
+        SqliteVecSearch,
+        open_db,
+    )
+    from media_search.application.import_directory import ImportDirectory
+    from media_search.application.search_media import SearchMediaAssets
+    from media_search.ports.search import SearchQuery
+
+    work = out_dir / f"work-{name}"
+    if work.exists():
+        shutil.rmtree(work)
+    work.mkdir(parents=True)
+    db_path = out_dir / f"media-{name}.db"
+    if db_path.exists():
+        db_path.unlink()
+
+    embedder = _build_embedder(name)
+    conn = open_db(db_path)
+    meta = SqliteMetadataRepository(conn)
+    vectors = SqliteVecSearch(conn, dimension=embedder.dimension)
+    importer = ImportDirectory(
+        embedder=embedder,
+        vectors=vectors,
+        metadata=meta,
+        media_probe=LocalMediaProbe(),
+        work_dir=work,
+    )
+    search = SearchMediaAssets(embedder=embedder, vectors=vectors, metadata=meta)
+
+    t0 = time.perf_counter()
+    summary = importer.execute_storage(LocalMediaStorage(corpus))
+    import_s = time.perf_counter() - t0
+
+    results = []
+    hit1 = 0
+    t_search = 0.0
+    for qid, q, hint in QUERIES:
+        ts = time.perf_counter()
+        hits = search.execute(SearchQuery(q=q, top_k=3))
+        t_search += time.perf_counter() - ts
+        rows = [
+            {"asset_id": h.asset.asset_id, "score": float(h.score)} for h in hits
+        ]
+        top = rows[0]["asset_id"] if rows else None
+        ok = bool(top and hint in top)
+        if ok:
+            hit1 += 1
+        results.append(
+            {
+                "id": qid,
+                "q": q,
+                "expected_hint": hint,
+                "hit1_ok": ok,
+                "top_k": rows,
+            }
+        )
+
+    api_calls = getattr(embedder, "api_calls", None)
+    payload = {
+        "embedder": name,
+        "model_id": getattr(embedder, "model_id", "unknown"),
+        "dimension": embedder.dimension,
+        "corpus": str(corpus),
+        "imported": summary.imported,
+        "import_seconds": round(import_s, 3),
+        "search_seconds_total": round(t_search, 3),
+        "hit1": hit1,
+        "hit1_total": len(QUERIES),
+        "hit1_rate": round(hit1 / len(QUERIES), 3),
+        "api_calls": api_calls,
+        "queries": results,
+    }
+    out_path = out_dir / f"results-{name}.json"
+    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(
+        f"[{name}] hit1={hit1}/{len(QUERIES)} "
+        f"import={import_s:.1f}s search={t_search:.1f}s -> {out_path}"
+    )
+    return payload
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--both", action="store_true")
+    parser.add_argument("--pass", dest="pass_name", default=os.environ.get("EMBEDDER_PASS", "local"))
+    args = parser.parse_args()
+    corpus = _corpus_dir()
+    out_dir = ROOT / "harness" / "eval" / "004-vertex-eval"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    passes = ["local", "vertex"] if args.both else [args.pass_name]
+    for name in passes:
+        run_pass(name=name, corpus=corpus, out_dir=out_dir)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

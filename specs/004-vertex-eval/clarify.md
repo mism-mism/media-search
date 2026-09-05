@@ -11,13 +11,13 @@ whether NL search exists.
 
 | ID | Question | Options | Status |
 |----|----------|---------|--------|
-| Q1 | What to evaluate in 004? | A **embeddings API only** (Vertex embed → keep sqlite-vec) / B Vertex AI Vector Search index only / C both (embed + managed index) / D research-doc only (no API calls) | unresolved (rec → **A**) |
-| Q2 | Production default after 004? | A keep OpenCLIP default; Vertex behind flag / B switch default to Vertex if go / C decide only in follow-on Feature | unresolved (rec → **A**) |
-| Q3 | Comparison corpus | A same ~18 Unsplash/GCS corpus + fixed JA/EN queries / B larger private set / C synthetic only | unresolved (rec → **A**) |
-| Q4 | Languages in eval | A EN only / B JA+EN / C JA only | unresolved (rec → **B**) |
-| Q5 | Go/no-go bar | A quality ≥ OpenCLIP on agreed queries + cost/latency note / B cost/latency only / C subjective demo only | unresolved (rec → **A**) |
-| Q6 | Eval spend ceiling | A ≤ few USD / hard stop / B no cap / C local-mock only (no Vertex bill) | unresolved (rec → **A**) |
-| Q7 | Where Vertex runs in eval | A offline/script against APIs (not production Cloud Run cutover) / B optional flag on Cloud Run behind IAP | unresolved (rec → **A**) |
+| Q1 | What to evaluate in 004? | A embeddings API only / B Vector Search only / C both / D research-doc only | resolved → **A** |
+| Q2 | Production default after 004? | A OpenCLIP default; Vertex flag / B switch if go / C follow-on only | resolved → **A** |
+| Q3 | Comparison corpus | A ~18 corpus + fixed JA/EN queries / B larger private / C synthetic | resolved → **A** |
+| Q4 | Languages in eval | A EN / B JA+EN / C JA | resolved → **B** |
+| Q5 | Go/no-go bar | A quality ≥ OpenCLIP + cost/latency / B cost only / C demo only | resolved → **A** |
+| Q6 | Eval spend ceiling | A ≤ few USD / B no cap / C mock only | resolved → **A** |
+| Q7 | Where Vertex runs in eval | A offline/script (no prod cutover) / B flag on Cloud Run | resolved → **A** |
 
 ## Decisions
 
@@ -26,11 +26,15 @@ whether NL search exists.
 | D0 | 004 = **evaluation** Feature; no immediate production cutover | Spec draft | 2026-09-05 |
 | D1 | Keep Local/OpenCLIP path; do not remove in 004 | Spec draft | 2026-09-05 |
 | D2 | Domain stays GCP-agnostic (Ports & Adapters) | Spec draft | 2026-09-05 |
-| D3 | 002+003 merged; IAP before broad exposure — satisfied to start eval | Human context | 2026-09-05 |
+| D3 | 002+003 merged; IAP before broad exposure — satisfied to start eval | Human | 2026-09-05 |
+| D4 | Eval slice = **Vertex multimodal embeddings API only**; keep sqlite-vec | Human (rec) | 2026-09-05 |
+| D5 | Production default stays **OpenCLIP**; Vertex behind flag / follow-on | Human (rec) | 2026-09-05 |
+| D6 | Corpus = current ~18 GCS/Unsplash set + fixed JA+EN query list | Human (rec) | 2026-09-05 |
+| D7 | Go/no-go requires quality evidence vs OpenCLIP **and** cost/latency notes | Human (rec) | 2026-09-05 |
+| D8 | Spend ceiling ≈ **few USD**; stop if exceeded | Human (rec) | 2026-09-05 |
+| D9 | Run eval via **scripts / offline harness** — do not cut over prod Cloud Run | Human (rec) | 2026-09-05 |
+| D10 | Clarify Round 1 locked (all recommended) | Human | 2026-09-05 |
 
 ## Unresolved items
 
-Agents must not guess answers for Q1–Q7 (affect Goal, Constraints, AC).
-**Stop for human lock** (accept recommendations or override).
-
--
+- None
