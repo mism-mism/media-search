@@ -2,18 +2,36 @@
 
 ## Approach
 
-After clarify: update Terraform to enable IAP on Cloud Run, remove `allUsers`
-invoker, bind IAP + selected principals. Update CD env/IAM. Document operator
-runbook. Keep application auth-agnostic unless Q1 selects JWT verification.
+Update Terraform for Cloud Run IAP (External brand is console/one-time setup
+documented; Terraform owns IAM + invoker bindings). Remove `allUsers` when
+`allow_unauthenticated=false`. Bind `roles/iap.httpsResourceAccessor` (and
+Cloud Run invoker as required by current Google IAP+Cloud Run pattern) to
+`var.iap_members` emails.
 
-## Likely surfaces (pending clarify)
+Keep application code unchanged (edge-only).
 
-- `infra/terraform` — IAP, IAM bindings, OAuth brand references
-- `.github/workflows/deploy-gcp.yml` — drop `--allow-unauthenticated`
-- `docs/run-gcp.md` or `docs/run-gcp-iap.md`
-- Optional: smoke script with `gcloud` user creds / IAP tunnel
+## Variables (intended)
 
-## Non-goals
+| Name | Purpose |
+|------|---------|
+| `allow_unauthenticated` | `true` = v0 public (dev); `false` = IAP/prod |
+| `iap_members` | list of `user:email@…` |
+| `enable_iap` | turn on IAP service / bindings when not public |
 
-- Vertex
-- Changing 002 product search behavior
+## Docs
+
+- `docs/run-gcp-iap.md`: OAuth External brand steps, add test users, grant
+  emails, browser smoke, 403 checklist.
+- Note: External brand in “Testing” mode limits test users — fine for v0 prod
+  for a small allowlist.
+
+## CD
+
+- `deploy-gcp.yml`: when deploying prod-shaped config, do **not** pass
+  `--allow-unauthenticated`; document required secret/vars for project.
+
+## Verify
+
+- Local FEATURE verify + reviews.
+- Manual: allowlisted user opens Cloud Run URL → Google login → app UI.
+- Manual negative: incognito / other account → denied.

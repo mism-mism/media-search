@@ -72,7 +72,13 @@ FEATURE=002-gcp-deployment ./scripts/verify
 ./scripts/semantic-real
 ```
 
-## Cold start note
+## Production vs experiment
 
-First request may download OpenCLIP weights into the container FS — use adequate
-Cloud Run memory (Terraform/CD default **4Gi**) and patience on cold start.
+| Mode | `allow_unauthenticated` | Use |
+|------|-------------------------|-----|
+| Experiment (002 v0) | `true` | Temporary public URL — **not production** |
+| Production | `false` + IAP emails | See [`run-gcp-iap.md`](run-gcp-iap.md) |
+
+**Do not cut over to production until Feature 003 (IAP) has converged** and you
+have verified browser login with your allowlisted Gmail.
+

@@ -1,4 +1,13 @@
-# Example (do not commit secrets):
-# project_id = "my-gcp-project"
-# region     = "asia-northeast1"
-# image      = "asia-northeast1-docker.pkg.dev/my-gcp-project/media-search-repo/media-search:latest"
+# Example (do not commit secrets / real emails to git if sensitive):
+#
+# Non-prod (002-style public URL — experimental only):
+#   project_id             = "my-gcp-project"
+#   region                 = "asia-northeast1"
+#   allow_unauthenticated  = true
+#   image                  = "asia-northeast1-docker.pkg.dev/my-gcp-project/media-search-repo/media-search:latest"
+#
+# Production (IAP — required before cutover; no Google Workspace needed):
+#   project_id             = "my-gcp-project"
+#   allow_unauthenticated  = false
+#   iap_members            = ["user:you@gmail.com"]
+#   image                  = "asia-northeast1-docker.pkg.dev/my-gcp-project/media-search-repo/media-search:latest"

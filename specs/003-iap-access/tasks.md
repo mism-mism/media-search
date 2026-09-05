@@ -1,26 +1,28 @@
 # Tasks: 003-iap-access
 
-## T000 — Clarify / grilling
+## T000 — Clarify
 
-- [ ] Resolve Q1–Q7 with human; write Decisions in clarify.md
-- [ ] Promote spec `draft` → `active` when OQ empty
-- AC: AC1
+- [x] Resolve OQ; status active; no Workspace / External / email allowlist
+- AC: AC1, AC5
 
 ## T001 — Terraform IAP + IAM
 
-- [ ] Remove public invoker; enable IAP; bind group/users
+- [x] `allow_unauthenticated` / `iap_members` / remove public invoker when false
+- [x] IAP invoker SA + httpsResourceAccessor members
+- [x] Example tfvars (prod vs non-prod)
 - AC: AC2
 
 ## T002 — CD alignment
 
-- [ ] Deploy workflow must not re-open anonymous access
+- [x] deploy-gcp: `allow_unauthenticated` input; default false; no silent public prod
 - AC: AC2
 
-## T003 — Docs + smoke behind IAP
+## T003 — Docs + manual smoke
 
-- [ ] Runbook; update gcp-smoke guidance
+- [x] `docs/run-gcp-iap.md` + production note in `run-gcp.md`
 - AC: AC3
 
 ## T004 — Outer reviews (full)
 
+- [x] reviews written
 - AC: AC4, AC5
