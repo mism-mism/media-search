@@ -18,6 +18,7 @@ from media_search.adapters.media_probe import LocalMediaProbe
 from media_search.adapters.sqlite_store import (
     SqliteFolderRepository,
     SqliteMetadataRepository,
+    SqliteProductRepository,
     SqliteVecSearch,
     open_db,
 )
@@ -142,6 +143,7 @@ def build_runtime() -> Runtime:
     db_lock = threading.Lock()
     meta = SqliteMetadataRepository(conn, lock=db_lock)
     folders = SqliteFolderRepository(conn, lock=db_lock)
+    products = SqliteProductRepository(conn, lock=db_lock)
     vectors = SqliteVecSearch(conn, dimension=embedder.dimension, lock=db_lock)
     search = SearchMediaAssets(embedder=embedder, vectors=vectors, metadata=meta)
     media_storage = _build_media_storage(data_dir)
@@ -220,6 +222,7 @@ def build_runtime() -> Runtime:
         metadata=meta,
         storage=media_storage,
         vectors=vectors,
+        products=products,
         frame_store=frame_store,
         import_jobs=import_jobs,
         on_after_mutate=persist,

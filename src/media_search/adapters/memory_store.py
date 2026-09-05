@@ -41,8 +41,34 @@ class InMemoryMetadataRepository:
                 out.append(a)
         return out
 
+    def count_by_product_id(self, product_id: str) -> int:
+        return sum(1 for a in self._items.values() if a.product_id == product_id)
+
     def delete(self, asset_id: str) -> None:
         self._items.pop(asset_id, None)
+
+
+class InMemoryProductRepository:
+    def __init__(self) -> None:
+        self._items: dict[str, object] = {}
+
+    def upsert(self, product) -> None:
+        from media_search.domain.product import Product
+
+        assert isinstance(product, Product)
+        self._items[product.product_id] = product
+
+    def get(self, product_id: str):
+        return self._items.get(product_id)
+
+    def list_all(self):
+        from media_search.domain.product import Product
+
+        items = [p for p in self._items.values() if isinstance(p, Product)]
+        return sorted(items, key=lambda p: (p.name.lower(), p.product_id))
+
+    def delete(self, product_id: str) -> None:
+        self._items.pop(product_id, None)
 
 
 class InMemoryVectorSearch:

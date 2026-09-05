@@ -94,9 +94,19 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     <div class="panel">
       <div class="row">
         <span id="crumb" class="muted">folder: (root)</span>
+        <select id="uploadProduct" title="Product (optional)">
+          <option value="">(no product)</option>
+        </select>
         <input id="file" type="file" accept=".jpg,.jpeg,.png,.mp4" multiple />
         <button id="upload">Upload</button>
       </div>
+      <div class="row">
+        <strong>Products</strong>
+        <input id="newProductId" size="10" placeholder="SKU id" />
+        <input id="newProductName" size="14" placeholder="name" />
+        <button id="addProduct">Add product</button>
+      </div>
+      <div id="products" class="muted"></div>
       <div id="assets"></div>
       <div id="out"></div>
     </div>
@@ -104,13 +114,16 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
   <script>
     let currentFolder = null;
     let folderCache = [];
+    let productCache = [];
     let busy = false;
     const foldersEl = document.getElementById('folders');
     const assetsEl = document.getElementById('assets');
+    const productsEl = document.getElementById('products');
     const out = document.getElementById('out');
     const statusEl = document.getElementById('status');
     const crumb = document.getElementById('crumb');
     const uploadBtn = document.getElementById('upload');
+    const uploadProduct = document.getElementById('uploadProduct');
 
     function setStatus(msg, kind) {{
       statusEl.textContent = msg;
@@ -182,7 +195,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
           <img src="${{a.thumbnail_url}}" alt="" />
           <div>
             <div><a href="/api/assets/${{encodeURI(a.asset_id)}}">${{a.display_name || a.asset_id}}</a></div>
-            <div class="muted">${{a.media_type}} · <code>${{a.asset_id}}</code></div>
+            <div class="muted">${{a.media_type}} · ${{a.product_id ? ('SKU ' + a.product_id + ' · ') : ''}}<code>${{a.asset_id}}</code></div>
           </div>
           <div class="actions">
             <button data-ren="${{a.asset_id}}">Rename</button>
@@ -232,10 +245,50 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       }});
     }}
 
+    async function refreshProducts() {{
+      const res = await fetch('/api/library/products');
+      const body = await res.json();
+      productCache = body.products || [];
+      uploadProduct.innerHTML = '<option value="">(no product)</option>' +
+        productCache.map(p =>
+          `<option value="${{p.product_id}}">${{p.name}} (${{p.product_id}})</option>`
+        ).join('');
+      productsEl.innerHTML = productCache.map(p =>
+        `<div class="row"><code>${{p.product_id}}</code> ${{p.name}}
+          <button data-pname="${{p.product_id}}">Rename</button>
+          <button data-pdel="${{p.product_id}}">Delete</button></div>`
+      ).join('') || '<p class="muted">no products yet</p>';
+      productsEl.querySelectorAll('[data-pname]').forEach(btn => {{
+        btn.onclick = async () => {{
+          const name = prompt('New product name');
+          if (!name) return;
+          const res = await fetch('/api/library/products/' + encodeURIComponent(btn.dataset.pname), {{
+            method: 'PATCH', headers: {{'Content-Type':'application/json'}},
+            body: JSON.stringify({{ name }})
+          }});
+          if (!res.ok) {{ setStatus('商品名変更失敗: ' + await res.text(), 'err'); return; }}
+          setStatus('商品名を更新しました', 'ok');
+          refreshProducts();
+        }};
+      }});
+      productsEl.querySelectorAll('[data-pdel]').forEach(btn => {{
+        btn.onclick = async () => {{
+          if (!confirm('Delete product?')) return;
+          const res = await fetch('/api/library/products/' + encodeURIComponent(btn.dataset.pdel), {{
+            method: 'DELETE'
+          }});
+          if (!res.ok) {{ setStatus('商品削除失敗: ' + await res.text(), 'err'); return; }}
+          setStatus('商品を削除しました', 'ok');
+          refreshProducts();
+        }};
+      }});
+    }}
+
     async function refreshAll() {{
       crumb.textContent = 'folder: ' + (currentFolder || '(root)');
       await loadAllFolders();
       await refreshFolders();
+      await refreshProducts();
       await refreshAssets();
       out.innerHTML = '';
     }}
@@ -252,6 +305,23 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       await loadAllFolders();
       refreshFolders();
     }};
+    document.getElementById('addProduct').onclick = async () => {{
+      const product_id = document.getElementById('newProductId').value.trim();
+      const name = document.getElementById('newProductName').value.trim();
+      if (!product_id || !name) {{
+        setStatus('product_id と name を入力してください', 'err');
+        return;
+      }}
+      const res = await fetch('/api/library/products', {{
+        method: 'POST', headers: {{'Content-Type':'application/json'}},
+        body: JSON.stringify({{ product_id, name }})
+      }});
+      if (!res.ok) {{ setStatus('商品追加失敗: ' + await res.text(), 'err'); return; }}
+      document.getElementById('newProductId').value = '';
+      document.getElementById('newProductName').value = '';
+      setStatus('商品を追加しました', 'ok');
+      refreshProducts();
+    }};
     uploadBtn.onclick = async () => {{
       const input = document.getElementById('file');
       const files = Array.from(input.files || []);
@@ -267,6 +337,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         const fd = new FormData();
         files.forEach(f => fd.append('files', f));
         if (currentFolder) fd.append('folder_id', currentFolder);
+        if (uploadProduct.value) fd.append('product_id', uploadProduct.value);
         const res = await fetch('/api/library/upload', {{ method: 'POST', body: fd }});
         const body = await res.json();
         if (!res.ok) {{
@@ -408,6 +479,24 @@ class AssetPatchIn(BaseModel):
     display_name: str | None = None
     folder_id: str | None = None
     product_id: str | None = None
+
+
+class ProductOut(BaseModel):
+    product_id: str
+    name: str
+
+
+class ProductCreateIn(BaseModel):
+    product_id: str
+    name: str
+
+
+class ProductPatchIn(BaseModel):
+    name: str
+
+
+class ProductListOut(BaseModel):
+    products: list[ProductOut]
 
 
 class ImportWarningOut(BaseModel):
@@ -797,6 +886,7 @@ def create_app(
         files: list[UploadFile] | None = File(default=None),
         file: UploadFile | None = File(default=None),
         folder_id: str | None = Form(default=None),
+        product_id: str | None = Form(default=None),
     ) -> UploadOut:
         if library is None:
             raise HTTPException(status_code=501, detail="library not configured")
@@ -816,6 +906,7 @@ def create_app(
                     data=items[0][1],
                     folder_id=folder_id or None,
                     content_type=items[0][2],
+                    product_id=product_id or None,
                 )
                 out_asset = _library_asset_out(asset)
                 return UploadOut(
@@ -824,7 +915,9 @@ def create_app(
                     job=_job_out(job) if job else None,
                 )
             assets, job = library.upload_many(
-                items=items, folder_id=folder_id or None
+                items=items,
+                folder_id=folder_id or None,
+                product_id=product_id or None,
             )
             outs = [_library_asset_out(a) for a in assets]
             return UploadOut(
@@ -840,6 +933,53 @@ def create_app(
             raise HTTPException(
                 status_code=409, detail={"error": "import_busy", "holder": exc.holder}
             ) from exc
+
+    @app.get("/api/library/products", response_model=ProductListOut)
+    def api_list_products() -> ProductListOut:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        return ProductListOut(
+            products=[
+                ProductOut(product_id=p.product_id, name=p.name)
+                for p in library.list_products()
+            ]
+        )
+
+    @app.post("/api/library/products", response_model=ProductOut)
+    def api_create_product(body: ProductCreateIn) -> ProductOut:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        try:
+            product = library.create_product(
+                product_id=body.product_id, name=body.name
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return ProductOut(product_id=product.product_id, name=product.name)
+
+    @app.patch("/api/library/products/{product_id}", response_model=ProductOut)
+    def api_patch_product(product_id: str, body: ProductPatchIn) -> ProductOut:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        try:
+            product = library.rename_product(product_id, body.name)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return ProductOut(product_id=product.product_id, name=product.name)
+
+    @app.delete("/api/library/products/{product_id}")
+    def api_delete_product(product_id: str) -> dict[str, str]:
+        if library is None:
+            raise HTTPException(status_code=501, detail="library not configured")
+        try:
+            library.delete_product(product_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"status": "deleted"}
 
     @app.patch("/api/library/assets/{asset_id:path}", response_model=LibraryAssetOut)
     def api_patch_asset(asset_id: str, body: AssetPatchIn) -> LibraryAssetOut:
