@@ -46,14 +46,15 @@ design—not before:
 
 | Capability | 001 (Local) | 002 (GCP) |
 |------------|-------------|-----------|
-| Application runtime | Local process / thin container | TBD (derive later) |
-| Media storage | Filesystem under import/data roots | TBD |
-| Metadata persistence | Local store via port | TBD |
-| Search / vector index | Existing **single-runtime** engine via adapter | TBD (no managed mega-cluster in 001) |
-| Embedding / AI | FakeEmbedder + Real Local model embedder | TBD |
-| Media source / preview | HTTP media endpoint (LocalMediaSource) | TBD |
-| Secrets / configuration | Local config / env | TBD |
-| Observability | Minimal local logging | TBD |
+| Application runtime | Local process / thin container | **Cloud Run** |
+| Media storage | Filesystem under import/data roots | **GCS** |
+| Metadata persistence | SQLite via port | **sqlite** (durable strategy per 002 plan) |
+| Search / vector index | sqlite-vec | **sqlite-vec** (same; Vertex deferred) |
+| Embedding / AI | FakeEmbedder + Real Local OpenCLIP | **OpenCLIP in Cloud Run** (Vertex deferred) |
+| Media source / preview | HTTP media endpoint (local files) | HTTP media endpoint **streaming from GCS** |
+| Secrets / configuration | Local config / env | Terraform + Actions (WIF preferred) |
+| Observability | Minimal local logging | Cloud Run logs (minimal) |
+| IaC / CD | n/a | **Terraform** + Actions **`workflow_dispatch`** |
 
 Illustrative ports (not mandatory names):
 

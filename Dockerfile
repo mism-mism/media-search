@@ -1,5 +1,4 @@
-# syntax=docker/dockerfile:1
-# Thin local runtime for Feature 001 — models are NOT baked in.
+# Cloud Run listens on $PORT
 FROM python:3.12-slim-bookworm
 
 RUN apt-get update \
@@ -12,16 +11,21 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 
 ARG INSTALL_SEMANTIC=0
+ARG INSTALL_GCP=0
 RUN pip install --no-cache-dir -e . \
-  && if [ "$INSTALL_SEMANTIC" = "1" ]; then pip install --no-cache-dir -e ".[semantic]"; fi
+  && if [ "$INSTALL_SEMANTIC" = "1" ]; then pip install --no-cache-dir -e ".[semantic]"; fi \
+  && if [ "$INSTALL_GCP" = "1" ]; then pip install --no-cache-dir -e ".[gcp]"; fi
 
 ENV MEDIA_SEARCH_DATA=/data \
     MEDIA_SEARCH_MEDIA_ROOT=/data/incoming \
-    MEDIA_SEARCH_DB=/data/media-fake.db \
+    MEDIA_SEARCH_DB=/data/media-local-cos.db \
     MEDIA_SEARCH_WORK=/data/work \
-    EMBEDDER=fake \
-    PYTHONUNBUFFERED=1
+    EMBEDDER=local \
+    MEDIA_BACKEND=local \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080
 
-EXPOSE 8000
+EXPOSE 8080
 
-CMD ["uvicorn", "media_search.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Cloud Run injects PORT; default 8080 for local parity.
+CMD ["sh", "-c", "uvicorn media_search.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

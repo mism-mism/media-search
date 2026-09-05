@@ -27,7 +27,7 @@ credentials, then later deploys the same application core to GCP via adapters.
 |-------|--------|
 | Development / Feature 001 | Local-first (no GCP required) |
 | Reproducible runtime (part of 001) | Thin container for the local slice |
-| Production | **Google Cloud Platform (GCP)** — vendor fixed; services undecided |
+| Production | **GCP** — Cloud Run + GCS (+ OpenCLIP / sqlite-vec in 002; Vertex later) |
 
 Development order:
 
@@ -42,17 +42,17 @@ Do **not** develop by deploying to GCP from day one.
 | Feature | Intent |
 |---------|--------|
 | **001** Local-first Media Asset Search Vertical Slice | Prove semantic search + filters + preview locally; converge Inner/Outer |
-| **002** `gcp-deployment` | Swap Local infrastructure adapters for GCP adapters; meet the same Product AC where possible |
-
-**002 candidate note (not a selection):** Vertex AI Vector Search and/or Vertex
-multimodal embeddings may be evaluated after 001 converges. They are **not**
-used in 001.
+| **002** `gcp-deployment` | Cloud Run + GCS; same OpenCLIP + sqlite-vec; Terraform + Actions CD; **auth none (v0)** |
+| **003** `iap-access` | **IAP** for Cloud Run; required before production cutover |
+| **004+** | Vertex eval (optional later) — see GitHub issues |
 
 Rules:
 
-- Do **not** start concrete GCP service selection for 002 until 001 has
-  converged.
-- Do **not** create `specs/002-gcp-deployment/` until 001 is ready to hand off.
+- Concrete GCP service selection for compute/storage is Feature **002**.
+- **Do not cut over to production** until Feature **003 (IAP)** converges.
+- Feature **002** may merge as unauthenticated plumbing; treat public URLs as
+  experimental only.
+- Feature specs: `specs/002-gcp-deployment/`, `specs/003-iap-access/`.
 - Bootstrap prompt summary (non-SoR):
   [`docs/prompts/media-search-server-bootstrap.md`](prompts/media-search-server-bootstrap.md)
 
