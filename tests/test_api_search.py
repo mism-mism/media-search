@@ -33,6 +33,29 @@ def test_health_ok():
     assert TestClient(app).get("/health").json()["status"] == "ok"
 
 
+def test_stats_counts_indexed_assets():
+    embedder = FakeEmbedder()
+    meta = InMemoryMetadataRepository()
+    vectors = InMemoryVectorSearch()
+    meta.upsert(
+        MediaAsset(
+            asset_id="a.png",
+            media_type=MediaType.IMAGE,
+            mime_type="image/png",
+            size_bytes=1,
+        )
+    )
+    app = create_app(
+        search=SearchMediaAssets(embedder=embedder, vectors=vectors, metadata=meta),
+        metadata=meta,
+        embedder_mode="fake",
+        embedder_id="fake:test",
+    )
+    body = TestClient(app).get("/api/stats").json()
+    assert body["indexed_assets"] == 1
+    assert body["embedder_mode"] == "fake"
+
+
 def test_search_returns_seeded_asset():
     embedder = FakeEmbedder()
     meta = InMemoryMetadataRepository()

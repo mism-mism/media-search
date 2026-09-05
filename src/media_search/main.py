@@ -93,8 +93,12 @@ def build_app():
             return
         from media_search.adapters.gcs_db_sync import upload_db
 
-        # Ensure sqlite flush before upload.
+        # Ensure sqlite flush before upload (checkpoint if WAL is ever enabled).
         conn.commit()
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:  # noqa: BLE001
+            pass
         upload_db(gcs_uri=db_gcs_uri, local_path=db_path)
 
     return create_app(

@@ -27,8 +27,9 @@ class ImportWarning:
 @dataclass
 class ImportSummary:
     imported: list[str] = field(default_factory=list)
-    skipped: list[ImportWarning] = field(default_factory=list)
     updated: list[str] = field(default_factory=list)
+    unchanged: list[str] = field(default_factory=list)
+    skipped: list[ImportWarning] = field(default_factory=list)
 
 
 class ImportDirectory:
@@ -47,7 +48,14 @@ class ImportDirectory:
         self._media_probe = media_probe
         self._work_dir = work_dir
 
-    def execute_storage(self, storage: MediaStoragePort) -> ImportSummary:
+    def execute_storage(
+        self, storage: MediaStoragePort, *, force: bool = False
+    ) -> ImportSummary:
+        """Index media from storage.
+
+        By default, assets already in metadata are left unchanged (no re-embed).
+        Pass force=True to re-index existing assets (expensive; operator opt-in).
+        """
         summary = ImportSummary()
         stage = Path(self._work_dir) / "import-stage" if self._work_dir else Path(
             tempfile.mkdtemp()
@@ -64,6 +72,9 @@ class ImportDirectory:
                     continue
                 try:
                     existed = self._metadata.get(key)
+                    if existed is not None and not force:
+                        summary.unchanged.append(key)
+                        continue
                     with storage.materialize(key, stage) as local_path:
                         asset = self._media_probe.build_asset(
                             local_path, import_root=local_path.parent

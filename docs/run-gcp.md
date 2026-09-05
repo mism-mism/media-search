@@ -73,6 +73,16 @@ FEATURE=002-gcp-deployment ./scripts/verify
 ./scripts/semantic-real
 ```
 
+## Index persistence (production)
+
+- Media bytes live in GCS (`incoming/`).
+- The search index is sqlite on the container disk, synced to
+  `MEDIA_SEARCH_DB_GCS` after each Import.
+- On cold start the service downloads that DB — **you do not re-Import just to
+  search**.
+- Default Import is **differential** (new keys only). Use `?force=true` /
+  「再インデックス」only when you intentionally want to re-embed everything.
+
 ## Production vs experiment
 
 | Mode | `allow_unauthenticated` | Use |
