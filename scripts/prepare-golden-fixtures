@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Generate distinctive golden fixtures under fixtures/golden/incoming."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+from PIL import Image, ImageDraw
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / "fixtures" / "golden" / "incoming"
+GOLDEN = ROOT / "fixtures" / "golden" / "golden.json"
+
+
+def _png(name: str, draw_fn) -> None:
+    img = Image.new("RGB", (256, 256), (245, 245, 245))
+    draw = ImageDraw.Draw(img)
+    draw_fn(draw)
+    path = OUT / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path, format="PNG")
+
+
+def _mp4(name: str, color: str, duration: float) -> None:
+    path = OUT / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c={color}:s=256x256:d={duration}",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-t",
+            str(duration),
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+
+def main() -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
+
+    _png(
+        "red-circle.png",
+        lambda d: d.ellipse((40, 40, 216, 216), fill=(220, 30, 30)),
+    )
+    _png(
+        "blue-square.png",
+        lambda d: d.rectangle((40, 40, 216, 216), fill=(30, 80, 220)),
+    )
+    _png(
+        "yellow-triangle.png",
+        lambda d: d.polygon([(128, 30), (230, 220), (26, 220)], fill=(240, 210, 40)),
+    )
+    _png(
+        "green-stripes.png",
+        lambda d: [
+            d.rectangle((0, y, 256, y + 24), fill=(20, 160, 60))
+            for y in range(0, 256, 48)
+        ],
+    )
+    _png(
+        "black-white-checker.png",
+        lambda d: [
+            d.rectangle(
+                (x, y, x + 32, y + 32),
+                fill=(0, 0, 0) if (x // 32 + y // 32) % 2 == 0 else (255, 255, 255),
+            )
+            for y in range(0, 256, 32)
+            for x in range(0, 256, 32)
+        ],
+    )
+
+    _mp4("orange-video.mp4", "orange", 6.0)
+    _mp4("purple-video-short.mp4", "purple", 2.0)
+
+    # Sidecar tags for filter tests (not used by semantic golden itself)
+    (OUT / "red-circle.png.meta.json").write_text(
+        json.dumps({"tags": ["shape", "red"], "description": "red circle"}),
+        encoding="utf-8",
+    )
+
+    cases = [
+        {"query": "a bright red circle", "expected_asset_id": "red-circle.png", "top_k": 5},
+        {"query": "a solid blue square", "expected_asset_id": "blue-square.png", "top_k": 5},
+        {"query": "a yellow triangle", "expected_asset_id": "yellow-triangle.png", "top_k": 5},
+        {"query": "green horizontal stripes", "expected_asset_id": "green-stripes.png", "top_k": 5},
+        {"query": "black and white checkerboard", "expected_asset_id": "black-white-checker.png", "top_k": 5},
+        {"query": "an orange colored video frame", "expected_asset_id": "orange-video.mp4", "top_k": 5},
+        {"query": "a purple video", "expected_asset_id": "purple-video-short.mp4", "top_k": 5},
+        {"query": "crimson round shape on light background", "expected_asset_id": "red-circle.png", "top_k": 5},
+        {"query": "azure blue rectangle", "expected_asset_id": "blue-square.png", "top_k": 5},
+        {"query": "gold triangular shape", "expected_asset_id": "yellow-triangle.png", "top_k": 5},
+        # Multilingual (Japanese) queries — same fixtures, Real Local xlm-roberta
+        {"query": "赤い円", "expected_asset_id": "red-circle.png", "top_k": 5},
+        {"query": "青い四角", "expected_asset_id": "blue-square.png", "top_k": 5},
+    ]
+    GOLDEN.parent.mkdir(parents=True, exist_ok=True)
+    GOLDEN.write_text(json.dumps(cases, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote fixtures to {OUT}")
+    print(f"wrote golden to {GOLDEN} ({len(cases)} cases)")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,84 +1,140 @@
 # Architecture
 
-## Shape of this template
+## Dual concern
 
-Process/harness OS (not an application architecture):
+This repository still runs the **Project OS** (CONSTITUTION, `AGENTS.md`,
+hooks, verify, loops, agent roles). That process architecture is unchanged in
+intent; see preserved docs (`LOOPS.md`, `RUNTIME.md`, `CI.md`, `ADOPTION.md`).
+
+This file describes the **media-search product** application architecture.
+
+## Product shape (ports & adapters)
 
 ```text
-CONSTITUTION.md     Why / invariant principles
-        ↓
-RULES (rules/)      What must hold
-        ↓
-HOOKS (hooks/)      When enforcement happens (deterministic)
-        ↓
-VERIFY              Whether deterministic requirements hold (scoped)
-        ↓
-INNER / OUTER LOOP  Convergence control
-        ↓
-AGENT ROLE          Vendor-neutral contracts (agents/*)
-        ↓
-RUNTIME             Capability contract (docs/RUNTIME.md)
-        ↓
-compatible runtimes (Codex / Claude Code / Cursor / …)
-        ↓
-CI (adapter)        Authoritative merge-time enforcement (not a loop)
-        ↓
-HUMAN               Escalation / acceptance
+Domain / Application
+        │
+        ▼
+   Port / Interface
+        │
+   ┌────┴─────┐
+   ▼          ▼
+Local       GCP
+Adapter     Adapter
 ```
+
+- **GCP is the production placement detail**, not a domain premise.
+- Do not leak GCP SDKs/APIs into Domain / Application.
+- Feature **001** implements **Local** adapters only (+ thin reproducible
+  container for that local slice).
+- Feature **002** swaps Local adapters for GCP adapters without changing
+  Domain / Application cores when possible.
+
+## Design principles
+
+1. SOLID / DIP — Domain depends on ports; adapters implement them
+2. Domain ↛ Infrastructure
+3. Vertical slices over premature platform sprawl
+4. Rule → Enforcer (else SKIP, never fake PASS) for harness gates
+5. Simplicity — no dual Local implementations “only to prove DIP”
+6. True adapter swap proof is **002** (Local → GCP); 001 proves one Real Local
+   path + dependency direction via architecture review and tests
+
+## Capability boundaries (names finalize after Domain)
+
+Propose Local vs GCP adapters for each capability after Product/Domain/Use Case
+design—not before:
+
+| Capability | 001 (Local) | 002 (GCP) |
+|------------|-------------|-----------|
+| Application runtime | Local process / thin container | TBD (derive later) |
+| Media storage | Filesystem under import/data roots | TBD |
+| Metadata persistence | Local store via port | TBD |
+| Search / vector index | Existing **single-runtime** engine via adapter | TBD (no managed mega-cluster in 001) |
+| Embedding / AI | FakeEmbedder + Real Local model embedder | TBD |
+| Media source / preview | HTTP media endpoint (LocalMediaSource) | TBD |
+| Secrets / configuration | Local config / env | TBD |
+| Observability | Minimal local logging | TBD |
+
+Illustrative ports (not mandatory names):
+
+```text
+MediaStorage / MetadataRepository / VectorSearch
+EmbeddingPort / MediaSource
+```
+
+## Embedder switching
+
+| Mode | Use |
+|------|-----|
+| `EMBEDDER=fake` | Unit / integration / wiring; deterministic |
+| `EMBEDDER=local` | Semantic golden tests + product evaluation |
+
+Default runtime posture for “real” app startup: **Real Local**.
+Fake must not be the default for product-like launches.
+**Fake must never count as semantic-search PASS.**
+
+## Verify / gates (product)
+
+```text
+Default verify
+├ deterministic tests (incl. Fake wiring)
+└ harness / schema / API contracts as configured
+
+Semantic-real gate (Required for 001 convergence; separate job/command)
+├ fixed model/version
+├ Real Local Embedder
+└ golden Top-K tests
+```
+
+Model cache miss → setup/download → run. Setup failure → **FAIL** (no silent
+SKIP). Full offline reproducibility is a **non-goal**.
+
+001 converged when: Inner deterministic verify + semantic-real + required
+reviews (profile **full**) pass.
+
+## Runtime language / framework (locked for 001)
+
+| Choice | Decision |
+|--------|----------|
+| Language | **Python 3.10+** (container target **3.12** when available) |
+| HTTP API | **FastAPI** |
+| Minimal UI | Static/templates served by the same app (no separate SPA framework required for 001) |
+| Media tooling | **ffmpeg** (frames) + **Pillow** (images) |
+| Embeddings | **OpenCLIP multilingual** default:
+  `xlm-roberta-base-ViT-B-32` / `laion5b_s13b_b90k` (override via env);
+  FakeEmbedder for deterministic tests |
+| Local vector | **SQLite** persistence + **sqlite-vec** (exact/local KNN). Filters may be applied in Application if simpler |
+| Container | `python` slim image + ffmpeg; model weights via cache volume (not baked in) |
+
+### Embedding contract (mandatory)
+
+- Multimodal: `embed_image` and `embed_text` share one space and dimension.
+- Index grain: persist **one vector per frame** (an image is one frame); collapse to
+  `MediaAsset` at query time via `asset_id` (`max` score + `best_frame`).
+- Changing the embedding model/version requires re-index.
+
+### Local vector engine rationale
+
+Chosen for local-first, single-runtime, persistence, low setup cost, and container
+friendliness. GCP migration impact is **not** a primary selector (002 rewrites
+the adapter). See 001 `plan.md` comparison table.
+
+## What 001 must not add “for GCP later”
+
+Microservices, Kubernetes, complex IaC, Pub/Sub, distributed job platforms,
+managed/distributed large-scale vector infrastructure, GCP-only abstractions
+without a Local path.
+
+## Project OS (unchanged summary)
 
 Work SoT: `specs/<NNN-name>/`. Agent entry: `AGENTS.md`.  
 Loops: [`LOOPS.md`](LOOPS.md) · Runtime: [`RUNTIME.md`](RUNTIME.md) ·
-CI: [`CI.md`](CI.md) · Adoption: [`ADOPTION.md`](ADOPTION.md).
+CI: [`CI.md`](CI.md).
 
-**Template dogfood history is not project history.** Fresh clones run
-`./scripts/adopt` once before `001` product features.
-
-## Authority split
-
-| Layer | Role |
-|-------|------|
-| Inner / Outer Loops | Quality **creation** (convergence) |
-| Agent roles | Vendor-neutral evaluation / mutation contracts |
-| Runtime capabilities | What a tool must be able to do (not product names) |
-| Hooks | Boundary defense |
-| CI | Merge-time authoritative **enforcement** |
-| Rulesets | Block merge unless required check passes |
-| Push to main | Health check only (post-hoc) |
-
-## Verify scope
-
-| Invocation | Meaning |
-|------------|---------|
-| `./scripts/verify` | Global/meta (includes `bash -n` on harness scripts) |
-| `FEATURE=NNN-slug ./scripts/verify` | Meta + completeness; **status does not skip reviews**; `reviewer_role:` presence on evaluator artifacts |
-
-## Hooks
-
-`pre-implement` / `post-implement` / `pre-review` / `pre-merge`.  
-`pre-merge` resolves **diff-touched** features (not all active).  
-Draft + spec/reviews-only → limited gate; otherwise full feature verify.
-
-## Design principles (adopting products)
-
-1. SOLID / DIP  
-2. Domain ↛ Infrastructure  
-3. Vertical slices  
-4. Rule → Enforcer (else SKIP, never fake PASS)  
-5. Vendor/CI adapt **to** repo hooks (OS does not call vendor agent CLIs)  
-6. Code quality = Correctness / Understandability / Changeability / Simplicity  
-7. Closed loops over open-loop handoffs (`docs/LOOPS.md`)  
-8. Roles independent of vendors/runtimes (`docs/RUNTIME.md`)
-
-## Reviews (unchanged sets; Loop labels)
-
-| Profile | Inner artifacts | Outer artifacts |
-|---------|-----------------|-----------------|
+| Profile | Inner | Outer |
+|---------|-------|-------|
 | lean | test, code-quality | product |
 | full | test, code-quality | + architecture, security, final (+ analyze) |
 
-Self-review optional (same context OK). Independent evaluators require a
-**separate role invocation**. Implementer mutates; evaluators evaluate only.
-
-## Parallelism (v0)
-
-1 task → 1 branch/worktree → 1 agent context (documented; not automated).
+Feature 001 uses **full** because it establishes cross-boundary contracts for
+the product.

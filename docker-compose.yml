@@ -1,0 +1,70 @@
+services:
+  media-search:
+    build:
+      context: .
+      args:
+        INSTALL_SEMANTIC: "0"
+    ports:
+      - "8000:8000"
+    environment:
+      EMBEDDER: ${EMBEDDER:-fake}
+      MEDIA_SEARCH_DATA: /data
+      MEDIA_SEARCH_MEDIA_ROOT: /data/incoming
+      MEDIA_SEARCH_DB: /data/media-fake.db
+      MEDIA_SEARCH_WORK: /data/work
+      TORCH_HOME: /models/torch
+      HF_HOME: /models/hf
+      OPEN_CLIP_CACHE_DIR: /models/open_clip
+    volumes:
+      - ./data:/data
+      - media_search_models:/models
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  media-search-local:
+    profiles: ["local"]
+    build:
+      context: .
+      args:
+        INSTALL_SEMANTIC: "1"
+    ports:
+      - "8000:8000"
+    environment:
+      EMBEDDER: local
+      MEDIA_SEARCH_DATA: /data
+      MEDIA_SEARCH_MEDIA_ROOT: /data/incoming
+      MEDIA_SEARCH_DB: /data/media-local-cos.db
+      MEDIA_SEARCH_WORK: /data/work
+      TORCH_HOME: /models/torch
+      HF_HOME: /models/hf
+      OPEN_CLIP_CACHE_DIR: /models/open_clip
+    volumes:
+      - ./data:/data
+      - media_search_models:/models
+      - ./fixtures/golden/incoming:/fixtures/golden:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 300s
+
+volumes:
+  media_search_models:
+    name: media_search_models

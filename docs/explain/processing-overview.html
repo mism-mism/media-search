@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>media-search — 処理と方針の説明資料</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0e1210;
+      --bg-elev: #161c18;
+      --bg-panel: #1c241f;
+      --line: #2a3630;
+      --text: #e6ede8;
+      --muted: #8a9a90;
+      --accent: #c8f06c;
+      --accent-dim: #7a9a3c;
+      --warn: #f0b06c;
+      --danger: #f07c6c;
+      --info: #6cc8f0;
+      --radius: 2px;
+      --max: 920px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1a2a18 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #122028 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+      font-family: "Sora", sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    body::before {
+      content: "";
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      z-index: 0;
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 5rem;
+    }
+
+    header.hero {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+      animation: rise 0.7s ease both;
+    }
+
+    .eyebrow {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 0.75rem;
+    }
+
+    h1 {
+      font-family: "Newsreader", serif;
+      font-weight: 600;
+      font-size: clamp(1.9rem, 4vw, 2.6rem);
+      line-height: 1.2;
+      margin: 0 0 0.75rem;
+      letter-spacing: -0.02em;
+    }
+
+    .lede {
+      color: var(--muted);
+      max-width: 38rem;
+      margin: 0;
+      font-size: 0.98rem;
+    }
+
+    nav.toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+      gap: 0.5rem;
+      margin: 1.75rem 0 0;
+    }
+
+    nav.toc a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.78rem;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 0.55rem 0.7rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    nav.toc a:hover {
+      border-color: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    section {
+      margin: 0 0 3rem;
+      animation: rise 0.6s ease both;
+    }
+
+    section:nth-of-type(2) { animation-delay: 0.05s; }
+    section:nth-of-type(3) { animation-delay: 0.1s; }
+    section:nth-of-type(4) { animation-delay: 0.15s; }
+
+    h2 {
+      font-family: "Newsreader", serif;
+      font-size: 1.55rem;
+      font-weight: 600;
+      margin: 0 0 0.85rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 1.5rem 0 0.6rem;
+      color: var(--accent);
+    }
+
+    p { margin: 0 0 0.9rem; }
+    p.muted, .muted { color: var(--muted); }
+
+    ul, ol { margin: 0 0 1rem; padding-left: 1.2rem; }
+    li { margin: 0.25rem 0; }
+
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+
+    .panel.warn {
+      border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+      background: color-mix(in srgb, var(--warn) 8%, var(--bg-panel));
+    }
+
+    .panel.danger {
+      border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+      background: color-mix(in srgb, var(--danger) 7%, var(--bg-panel));
+    }
+
+    .panel.info {
+      border-color: color-mix(in srgb, var(--info) 40%, var(--line));
+      background: color-mix(in srgb, var(--info) 7%, var(--bg-panel));
+    }
+
+    .label {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.45rem;
+    }
+
+    pre.flow {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      white-space: pre;
+      overflow-x: auto;
+      margin: 0;
+      color: var(--text);
+    }
+
+    .pipeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      margin: 1.25rem 0;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 2.4rem 1fr;
+      gap: 0.75rem;
+      align-items: start;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      padding: 0.85rem 0.95rem;
+      transition: border-color 0.2s;
+    }
+
+    .step:hover { border-color: var(--accent-dim); }
+
+    .step-num {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.75rem;
+      color: var(--bg);
+      background: var(--accent);
+      width: 2.1rem;
+      height: 2.1rem;
+      display: grid;
+      place-items: center;
+      font-weight: 500;
+    }
+
+    .step h4 {
+      margin: 0 0 0.25rem;
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .step p {
+      margin: 0;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .arch {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.6rem;
+      margin: 1rem 0;
+    }
+
+    @media (min-width: 640px) {
+      .arch-split {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 0.75rem;
+        align-items: stretch;
+      }
+    }
+
+    .box {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      padding: 0.9rem;
+      text-align: center;
+    }
+
+    .box.core {
+      border-color: var(--accent-dim);
+      background: color-mix(in srgb, var(--accent) 6%, var(--bg-elev));
+    }
+
+    .box strong {
+      display: block;
+      font-size: 0.9rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .box span {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: var(--accent);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 1.1rem;
+      padding: 0.25rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      margin: 1rem 0;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 0.55rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--bg-elev);
+      font-weight: 600;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    code, .mono {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.84em;
+    }
+
+    .tag {
+      display: inline-block;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.4rem;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      margin-right: 0.25rem;
+    }
+
+    .tag.on {
+      color: var(--accent);
+      border-color: var(--accent-dim);
+    }
+
+    .tag.off {
+      color: var(--danger);
+      border-color: color-mix(in srgb, var(--danger) 50%, var(--line));
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      padding-top: 1.25rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    footer a { color: var(--accent); }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <p class="eyebrow">media-search · explanation brief · 2026-09-05</p>
+      <h1>素材検索サーバー<br />処理と方針の見取り図</h1>
+      <p class="lede">
+        「何が起きるか」を中心に、確定済みの Local-first / Ports / Feature 001–002
+        を一枚で追える説明資料です。実装コードの代わりに、処理の流れを理解するための資料です。
+      </p>
+      <nav class="toc" aria-label="目次">
+        <a href="#goal">1. 何を作るか</a>
+        <a href="#arch">2. 全体構造</a>
+        <a href="#pipeline">3. 処理パイプライン</a>
+        <a href="#video">4. 動画の扱い</a>
+        <a href="#search">5. 検索の契約</a>
+        <a href="#features">6. 001 と 002</a>
+        <a href="#vertex">7. Vertex について</a>
+        <a href="#gates">8. 完了の測り方</a>
+        <a href="#tbd">9. まだ決めていないこと</a>
+      </nav>
+    </header>
+
+    <section id="goal">
+      <h2>1. 何を作るか</h2>
+      <p>
+        画像と動画の素材を取り込み、<strong>意味（セマンティック）で探し</strong>、
+        詳細とプレビューまで到達できるサーバーです。
+      </p>
+      <div class="panel">
+        <div class="label">いちばん見せたい体験（Feature 001）</div>
+        <p style="margin:0">
+          「屋外で笑っている女性」のような自然言語クエリで、
+          <strong>画像も動画も混在</strong>した素材一覧が返り、クリックすると原素材を見られる。
+        </p>
+      </div>
+      <p class="muted">
+        本番の置き場所は GCP。ただし最初の開発は GCP なしでローカル完結。
+        クラウドの都合でドメイン設計を歪めない、が大原則です。
+      </p>
+    </section>
+
+    <section id="arch">
+      <h2>2. 全体構造（Ports &amp; Adapters）</h2>
+      <p>
+        業務の中心（Domain / Application）は「保存がディスクか GCS か」を知りません。
+        外の世界は <span class="mono">Port</span>（口）越しにだけ触り、
+        口の向こう側に Local 実装か GCP 実装を挿します。
+      </p>
+
+      <div class="arch">
+        <div class="box core">
+          <strong>Domain / Application</strong>
+          <span>MediaAsset・検索ユースケース・ルール</span>
+        </div>
+        <div class="arrow">▼ Port / Interface</div>
+        <div class="arch-split">
+          <div class="box">
+            <strong>Local Adapter</strong>
+            <span>001 で実装する側<br />Filesystem / 局所 Vector / Real Local Embed</span>
+          </div>
+          <div class="arrow">↔</div>
+          <div class="box">
+            <strong>GCP Adapter</strong>
+            <span>002 で差し替える側<br />（サービス名はまだ決めない）</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel info">
+        <div class="label">覚える一文</div>
+        <p style="margin:0"><strong>Local first / GCP second / Domain はどちらも知らない</strong></p>
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <h2>3. 処理パイプライン（ここが本体）</h2>
+      <p>
+        素材が検索可能になるまで、だいたい次の順番で処理が進みます。
+        「検索」は最後の段で、前段の成果物（メタデータとベクトル）を使います。
+      </p>
+
+      <div class="pipeline">
+        <article class="step">
+          <div class="step-num">01</div>
+          <div>
+            <h4>指定ディレクトリから Import</h4>
+            <p>
+              例: <span class="mono">data/incoming/</span> を一括取り込み。
+              監視（watch）は必須ではない。<br />
+              対応保証: JPEG / PNG / MP4(H.264)。それ以外は SKIP + 警告して続行。
+            </p>
+          </div>
+        </article>
+        <article class="step">
+          <div class="step-num">02</div>
+          <div>
+            <h4>Identity（同一判定）</h4>
+            <p>
+              資産の ID = import root からの相対パス。再 import は upsert（増殖しない）。
+              中身の hash を Domain の identity にはしない。
+            </p>
+          </div>
+        </article>
+        <article class="step">
+          <div class="step-num">03</div>
+          <div>
+            <h4>Metadata 抽出</h4>
+            <p>
+              自動: MIME, size, 幅高さ, duration, EXIF, ffprobe 系。<br />
+              人手/fixture: tags, description。<strong>AI キャプションは作らない</strong>
+              （Embedding 品質と混ぜて評価しないため）。
+            </p>
+          </div>
+        </article>
+        <article class="step">
+          <div class="step-num">04</div>
+          <div>
+            <h4>動画だけ：代表フレーム抽出</h4>
+            <p>
+              動画を数枚の静止画に落とす（後述）。画像はそのまま 1 枚として次へ。
+              音声・字幕・シーン検出はしない。
+            </p>
+          </div>
+        </article>
+        <article class="step">
+          <div class="step-num">05</div>
+          <div>
+            <h4>Embedding（ベクトル化）</h4>
+            <p>
+              画像（と動画の各フレーム）を数値ベクトルにする。
+              検索クエリのテキストも<strong>同じ空間</strong>のベクトルにする
+              （いわゆる multimodal / CLIP 級が必要）。<br />
+              <span class="tag">Fake</span> 配線・決定的テスト用　
+              <span class="tag on">Real Local</span> 意味検索の本番評価用
+            </p>
+          </div>
+        </article>
+        <article class="step">
+          <div class="step-num">06</div>
+          <div>
+            <h4>Local Vector Index へ保存</h4>
+            <p>
+              局所・単一ランタイムの既存エンジンへ格納（ANN 自作はしない）。
+              managed な大規模 Vector infra（Vertex AI Vector Search など）は 001 では使わない。
+            </p>
+          </div>
+        </article>
+        <article class="step">
+          <div class="step-num">07</div>
+          <div>
+            <h4>検索</h4>
+            <p>
+              ユーザーの自然言語クエリを embed → 近いベクトルを取る →
+              mediaType / tags で絞る → MediaAsset 一覧（スコア・サムネ）。
+            </p>
+          </div>
+        </article>
+        <article class="step">
+          <div class="step-num">08</div>
+          <div>
+            <h4>詳細 &amp; Preview</h4>
+            <p>
+              詳細画面。原素材はパスを生で見せるのではなく、
+              MediaSource Port → HTTP で画像表示 / 動画再生。
+            </p>
+          </div>
+        </article>
+      </div>
+
+      <div class="panel">
+        <div class="label">一文フロー</div>
+        <pre class="flow">incoming/
+  → import / upsert
+  → metadata
+  → (video → frames)
+  → embed
+  → local vector index
+  → semantic query + filters
+  → MediaAsset results
+  → detail + HTTP preview</pre>
+      </div>
+    </section>
+
+    <section id="video">
+      <h2>4. 動画の扱い（崩壊＝collapse）</h2>
+      <p>
+        動画も画像も<strong>同じ埋め込み空間</strong>に載せます。
+        ただしユーザーに返す単位は常に「素材 1 件（MediaAsset）」です。
+        「フレームがヒットした」ことを Domain の検索結果型にはしません。
+      </p>
+
+      <pre class="flow panel">Video
+  ├ duration &lt; 5s  → 中央フレーム 1 枚
+  └ duration ≥ 5s  → 最大 3 枚を均等サンプリング
+        │
+        ▼
+   frame embeddings（画像と同じ空間）
+        │
+        ▼
+   score = max(frame scores)
+   bestFrame = 最高スコアのフレーム（証跡・サムネ用）
+        │
+        ▼
+   検索結果には Video Asset が 1 件だけ並ぶ</pre>
+
+      <ul>
+        <li><span class="tag on">一覧</span> Asset / mediaType / score / thumbnail（動画は bestFrame 由来）</li>
+        <li><span class="tag on">詳細</span> bestFrame を optional で見せてよい（デバッグ証跡）</li>
+        <li><span class="tag off">禁止</span> VideoSegment を Domain の検索ヒットとして公開</li>
+      </ul>
+    </section>
+
+    <section id="search">
+      <h2>5. 検索の契約</h2>
+      <p>001 の検索はこれだけです。キーワード検索という言葉は使いません。</p>
+
+      <pre class="flow panel">query（必須・空文字は 400）
+  ↓
+semantic search
+  +
+metadata filters
+  · mediaType: image | video
+  · tags: 複数指定時は AND
+  ↓
+results（融合ランキングはしない）</pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>やること</th>
+            <th>やらないこと（001）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>意味検索が主</td>
+            <td>filename / path / description の部分一致</td>
+          </tr>
+          <tr>
+            <td>tags の AND 絞り込み</td>
+            <td>OR や複雑な条件式</td>
+          </tr>
+          <tr>
+            <td>空クエリはエラー</td>
+            <td>filter だけのブラウズ一覧</td>
+          </tr>
+          <tr>
+            <td>画像＋動画の混在結果</td>
+            <td>スコア融合（keyword×semantic など）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>合格の測り方（semantic）</h3>
+      <ul>
+        <li>小さな golden set（8〜12 クエリ）。画像・動画の両方を含む。</li>
+        <li>機械: <span class="mono">expectedAssetId ∈ Top-5</span>（Real Local Embedder）</li>
+        <li>人間: Outer で「使えそうか」</li>
+        <li><strong>Fake Embedder では意味検索 PASS にしない</strong></li>
+      </ul>
+    </section>
+
+    <section id="features">
+      <h2>6. Feature 001 と 002</h2>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>001 Local Vertical Slice</th>
+            <th>002 GCP Deployment</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>目的</td>
+            <td>検索プロダクトの価値をローカルで証明</td>
+            <td>同じコアを GCP Adapter に差し替え</td>
+          </tr>
+          <tr>
+            <td>GCP</td>
+            <td>不要（認証なし）</td>
+            <td>ここで初めて配置</td>
+          </tr>
+          <tr>
+            <td>Container</td>
+            <td>薄い再現起動（本番設計ではない）</td>
+            <td>本番寄りの配置設計</td>
+          </tr>
+          <tr>
+            <td>いつ作る</td>
+            <td>いま（active）</td>
+            <td>001 収束後。今は specs を作らない</td>
+          </tr>
+          <tr>
+            <td>profile</td>
+            <td>full（境界を最初に固定するため）</td>
+            <td>後で決定</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="panel">
+        <div class="label">2 日間の終点</div>
+        <p style="margin:0">
+          Phase 4 まで＝ローカルで Vertical Slice が Inner/Outer 収束するところ。
+          GCP 上確認は次の Feature。
+        </p>
+      </div>
+    </section>
+
+    <section id="vertex">
+      <h2>7. Vertex AI Vector Search について</h2>
+      <div class="panel danger">
+        <div class="label">結論（確定方針との整合）</div>
+        <p style="margin:0">
+          <strong>001 の主エンジンには使わない。</strong>
+          公式サポートがあることと、Local-first の第一スライスは別問題です。
+        </p>
+      </div>
+      <ul>
+        <li>001 禁止事項: managed / distributed 大規模 vector infrastructure</li>
+        <li>001 要件: GCP 認証なしで意味検索 AC を通す</li>
+        <li>切り分け: 「検索が悪い」のか「GCP 化で壊れた」のかを分けたい</li>
+      </ul>
+      <div class="panel warn">
+        <div class="label">002 での扱い</div>
+        <p style="margin:0">
+          Vertex AI Vector Search は <strong>002 の有力候補</strong>になり得る。
+          ただし正式選定は 001 収束後。今は「候補メモ」まで。
+        </p>
+      </div>
+      <pre class="flow panel">001  LocalVectorSearch（例: SQLite + sqlite-vec 等）
+        ↑ 同じ VectorSearch Port
+002  GcpVectorSearch（中身が Vertex でもよい）</pre>
+    </section>
+
+    <section id="gates">
+      <h2>8. 完了の測り方（ゲート）</h2>
+      <pre class="flow panel">Default verify
+  · unit / Fake wiring / import / API など決定的なもの
+  · 巨大モデル取得は背負わない
+
+Semantic-real gate（別コマンド/ジョブだが 001 では必須）
+  · Real Local Embedder
+  · 固定 model/version
+  · golden Top-K
+  · モデル取得失敗 → FAIL（黙って SKIP しない）
+
++ full profile の reviews
+= 001 converged</pre>
+      <p class="muted">
+        認証なし・単一ユーザー。AuthPort すら 001 では作らない。
+      </p>
+    </section>
+
+    <section id="tbd">
+      <h2>9. まだ決めていないこと（T001）</h2>
+      <p>処理の形は決まっています。次に決めるのは「どの道具で実装するか」です。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>状態</th>
+            <th>メモ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>言語 / FW</td>
+            <td>未定</td>
+            <td>ARCHITECTURE に書く。敵対検証では Python+FastAPI が最有力</td>
+          </tr>
+          <tr>
+            <td>局所 Vector エンジン</td>
+            <td>未定</td>
+            <td>plan.md で比較。001 では単一ランタイム既存実装</td>
+          </tr>
+          <tr>
+            <td>Embedding モデル名+version</td>
+            <td>未定</td>
+            <td>multimodal（text↔image 同一空間）必須。Ollama 固定はしない</td>
+          </tr>
+          <tr>
+            <td>具体 GCP サービス</td>
+            <td>意図的に未定</td>
+            <td>001 収束まで選定開始しない</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="panel info">
+        <div class="label">仕様上まだ明示強化が推奨される点</div>
+        <ul style="margin:0">
+          <li>埋め込みは multimodal 契約であること</li>
+          <li>インデックスの永続粒度は frame（画像は 1 frame）で、assetId で collapse</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer>
+      <p>
+        正本:
+        <a href="../PRODUCT.md">PRODUCT.md</a> ·
+        <a href="../ARCHITECTURE.md">ARCHITECTURE.md</a> ·
+        <a href="../DOMAIN.md">DOMAIN.md</a> ·
+        <a href="../../specs/001-media-asset-search-vertical-slice/spec.md">001 spec</a> ·
+        <a href="../prompts/media-search-server-bootstrap.md">bootstrap prompt（要約）</a>
+      </p>
+      <p>
+        他社比較:
+        <a href="../research/2026-09-05-peer-media-search-approaches.md">peer media search approaches</a>
+      </p>
+      <p>この HTML は説明用スナップショットです。矛盾があれば docs / spec を優先してください。</p>
+    </footer>
+  </div>
+</body>
+</html>

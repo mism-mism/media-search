@@ -171,7 +171,16 @@ skip "typecheck" "not_configured"
 skip "architecture" "not_configured"
 skip "complexity" "not_configured"
 skip "dead-code" "not_configured"
-skip "unit-test" "not_configured"
+# Product unit tests (Python)
+if [[ -f "$ROOT/pyproject.toml" ]] && command -v python3 >/dev/null 2>&1; then
+  if (cd "$ROOT" && python3 -m pytest -q >/tmp/media-search-pytest.out 2>&1); then
+    pass "unit-test"
+  else
+    fail "unit-test" "pytest failed — see /tmp/media-search-pytest.out"
+  fi
+else
+  skip "unit-test" "not_configured"
+fi
 skip "integration-test" "not_configured"
 skip "acceptance-test" "not_configured"
 skip "security-scan" "not_configured"
