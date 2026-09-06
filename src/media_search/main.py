@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -109,11 +110,13 @@ class Runtime:
     search: SearchMediaAssets
     metadata: SqliteMetadataRepository
     folders: SqliteFolderRepository
+    products: SqliteProductRepository
     library: LibraryService
     import_lock: ImportLockPort
     job_store: FilesystemJobStore | GcsJobStore
     import_jobs: ImportJobPort
     persist_db: Callable[[], None] | None
+    reload_db: Callable[[], None] | None
     work_dir: Path
     db_path: Path
 
@@ -140,7 +143,7 @@ def build_runtime() -> Runtime:
         download_db_if_remote(gcs_uri=db_gcs_uri, local_path=db_path)
 
     conn = open_db(db_path)
-    db_lock = threading.Lock()
+    db_lock: threading.RLock = threading.RLock()
     meta = SqliteMetadataRepository(conn, lock=db_lock)
     folders = SqliteFolderRepository(conn, lock=db_lock)
     products = SqliteProductRepository(conn, lock=db_lock)
@@ -158,15 +161,42 @@ def build_runtime() -> Runtime:
         frame_store=frame_store,
     )
 
+    # Mutable cell so persist/reload always use the active sqlite connection.
+    active_conn: list[sqlite3.Connection] = [conn]
+
     def persist_db() -> None:
         if not db_gcs_uri:
             return
         from media_search.adapters.gcs_db_sync import upload_db
 
-        conn.commit()
+        active_conn[0].commit()
         upload_db(gcs_uri=db_gcs_uri, local_path=db_path)
 
+    def reload_db() -> None:
+        """Pull remote sqlite after Import Job and swap connections in-place."""
+        if not db_gcs_uri:
+            return
+        from media_search.adapters.gcs_db_sync import download_db_if_remote
+
+        with db_lock:
+            try:
+                active_conn[0].commit()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                active_conn[0].close()
+            except Exception:  # noqa: BLE001
+                pass
+            download_db_if_remote(gcs_uri=db_gcs_uri, local_path=db_path)
+            new_conn = open_db(db_path)
+            meta.replace_connection(new_conn)
+            folders.replace_connection(new_conn)
+            products.replace_connection(new_conn)
+            vectors.replace_connection(new_conn)
+            active_conn[0] = new_conn
+
     persist = persist_db if db_gcs_uri else None
+    reload = reload_db if db_gcs_uri else None
 
     is_worker = os.environ.get("IMPORT_MODE", "").strip().lower() == "worker"
     want_cloudrun_enqueue = (
@@ -237,11 +267,13 @@ def build_runtime() -> Runtime:
         search=search,
         metadata=meta,
         folders=folders,
+        products=products,
         library=library,
         import_lock=import_lock,
         job_store=job_store,
         import_jobs=import_jobs,
         persist_db=persist,
+        reload_db=reload,
         work_dir=work_dir,
         db_path=db_path,
     )
@@ -258,6 +290,7 @@ def build_app():
         media_storage=rt.media_storage,
         frame_store=rt.frame_store,
         on_after_import=rt.persist_db,
+        on_db_reload=rt.reload_db,
         embedder_mode=rt.embedder_mode,
         embedder_id=getattr(rt.embedder, "model_id", "unknown"),
     )

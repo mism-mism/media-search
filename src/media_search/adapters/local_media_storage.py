@@ -38,6 +38,9 @@ class LocalMediaStorage:
         except ValueError:
             return False
 
+    def size_bytes(self, key: str) -> int:
+        return self._resolve(key).stat().st_size
+
     def read_bytes(self, key: str) -> bytes:
         return self._resolve(key).read_bytes()
 

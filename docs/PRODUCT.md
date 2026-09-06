@@ -48,10 +48,11 @@ Do **not** develop by deploying to GCP from day one.
 | **005** `scale-media-ingest` | ~10k image+video; team UI → Cloud Run Job; GCS thumbs; sqlite single-writer | completed |
 | **006** `media-library` | Virtual folders + upload/manage + colocated search | completed |
 | **007** `product-search-api` | Product name + similar-image search API (hybrid SKU) | completed |
-| **008** `sku-product-embedder-eval` | Eval product/SKU retrieval embedders vs OpenCLIP | completed (PR) |
+| **008** `sku-product-embedder-eval` | Eval product/SKU retrieval embedders vs OpenCLIP | completed |
 | **009** `search-index-performance` | Warm search + Import indexing speed | completed |
-| **010** `product-master-upload-select` | Product master + select product on upload | active (PR) |
-| **011** `bigquery-vector-search-eval` | Eval BigQuery VECTOR_SEARCH vs sqlite-vec — **no-go interactive**; batch OK | completed (PR) |
+| **010** `product-master-upload-select` | Product master + select product on upload | completed |
+| **011** `bigquery-vector-search-eval` | Eval BigQuery VECTOR_SEARCH vs sqlite-vec — **no-go interactive**; batch OK | completed |
+| **012** `import-experience` | Faster upload→indexed Import (incremental + freshness) | active |
 
 Rules:
 

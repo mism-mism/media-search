@@ -16,6 +16,13 @@ class SqliteMetadataRepository:
     def __init__(self, conn: sqlite3.Connection, *, lock: threading.Lock | None = None) -> None:
         self._conn = conn
         self._lock = lock or threading.Lock()
+        self._ensure_schema()
+
+    def replace_connection(self, conn: sqlite3.Connection) -> None:
+        with self._lock:
+            self._conn = conn
+
+    def _ensure_schema(self) -> None:
         with self._lock:
             self._conn.execute(
                 """
@@ -174,6 +181,10 @@ class SqliteFolderRepository:
             )
             self._conn.commit()
 
+    def replace_connection(self, conn: sqlite3.Connection) -> None:
+        with self._lock:
+            self._conn = conn
+
     def upsert(self, folder) -> None:
         from media_search.ports.folder import Folder
 
@@ -263,6 +274,10 @@ class SqliteProductRepository:
                 """
             )
             self._conn.commit()
+
+    def replace_connection(self, conn: sqlite3.Connection) -> None:
+        with self._lock:
+            self._conn = conn
 
     def upsert(self, product) -> None:
         from media_search.domain.product import Product
@@ -412,6 +427,20 @@ class SqliteVecSearch:
                 )
                 self._conn.execute("DELETE FROM frames WHERE frame_key = ?", (key,))
             self._conn.commit()
+
+    def has_frames(self, asset_id: str) -> bool:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM frames WHERE asset_id = ? LIMIT 1", (asset_id,)
+            ).fetchone()
+        return row is not None
+
+    def replace_connection(self, conn: sqlite3.Connection) -> None:
+        """Swap underlying sqlite connection (used after GCS DB reload)."""
+        with self._lock:
+            self._conn = conn
+            self._conn.enable_load_extension(True)
+            sqlite_vec.load(self._conn)
 
     def search(
         self,

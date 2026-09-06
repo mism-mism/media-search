@@ -97,6 +97,9 @@ class InMemoryVectorSearch:
         for k in drop:
             del self._frames[k]
 
+    def has_frames(self, asset_id: str) -> bool:
+        return any(aid == asset_id for aid, _, _ in self._frames.values())
+
     def search(
         self,
         *,

@@ -44,7 +44,11 @@ def run_worker(job_id: str | None = None) -> int:
     job.holder = holder
     store.save(job)
     try:
-        keys = rt.media_storage.list_media_keys()
+        keys = (
+            list(job.only_keys)
+            if job.only_keys
+            else rt.media_storage.list_media_keys()
+        )
         job.total = len(keys)
         store.save(job)
 
@@ -56,7 +60,11 @@ def run_worker(job_id: str | None = None) -> int:
             cur.total = total
             store.save(cur)
 
-        summary = rt.importer.execute_storage(rt.media_storage, on_progress=on_progress)
+        summary = rt.importer.execute_storage(
+            rt.media_storage,
+            only_keys=list(job.only_keys) if job.only_keys else None,
+            on_progress=on_progress,
+        )
         job = store.get(job.job_id) or job
         job.status = ImportJobStatus.SUCCEEDED
         job.imported = list(summary.imported)

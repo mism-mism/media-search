@@ -4,7 +4,7 @@ import os
 import shutil
 import tempfile
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -70,6 +70,7 @@ class ImportDirectory:
         self,
         storage: MediaStoragePort,
         *,
+        only_keys: Sequence[str] | None = None,
         on_progress: Callable[[int, int], None] | None = None,
     ) -> ImportSummary:
         summary = ImportSummary()
@@ -78,7 +79,10 @@ class ImportDirectory:
         )
         own_stage = self._work_dir is None
         stage.mkdir(parents=True, exist_ok=True)
-        keys = storage.list_media_keys()
+        if only_keys is not None:
+            keys = [k for k in only_keys if storage.exists(k)]
+        else:
+            keys = storage.list_media_keys()
         total = len(keys)
         processed = 0
 
@@ -151,29 +155,38 @@ class ImportDirectory:
                 shutil.rmtree(stage, ignore_errors=True)
         return summary
 
+    def _needs_embed(
+        self, storage: MediaStoragePort, key: str
+    ) -> tuple[bool, MediaAsset | None, str | None]:
+        """Return (needs_work, existed_meta, skip_reason_if_any)."""
+        kind = classify_path(Path(key))
+        if kind is None:
+            return False, None, "unsupported format"
+        existed = self._metadata.get(key)
+        has_vec = self._vectors.has_frames(key)
+        if existed is not None and has_vec:
+            try:
+                size_bytes = storage.size_bytes(key)
+            except FileNotFoundError:
+                return False, existed, "missing object"
+            if existed.size_bytes == size_bytes:
+                return False, existed, "unchanged"
+        return True, existed, None
+
     def _prepare_one(
         self,
         storage: MediaStoragePort,
         stage: Path,
         key: str,
     ) -> _PreparedAsset | ImportWarning:
-        kind = classify_path(Path(key))
-        if kind is None:
-            return ImportWarning(path=key, reason="unsupported format")
+        needs, existed, skip_reason = self._needs_embed(storage, key)
+        if not needs:
+            return ImportWarning(path=key, reason=skip_reason or "unchanged")
 
-        existed = self._metadata.get(key)
         worker_stage = stage / f"w-{uuid.uuid4().hex}"
         worker_stage.mkdir(parents=True, exist_ok=True)
         try:
             with storage.materialize(key, worker_stage) as local_path:
-                size_bytes = local_path.stat().st_size
-                if (
-                    existed is not None
-                    and existed.size_bytes == size_bytes
-                    and classify_path(Path(key)) is not None
-                ):
-                    return ImportWarning(path=key, reason="unchanged")
-
                 asset = self._media_probe.build_asset(
                     local_path, import_root=local_path.parent
                 )
