@@ -11,6 +11,9 @@ from pydantic import BaseModel, Field
 
 from media_search.adapters.local_media_storage import LocalMediaStorage
 from media_search.application.import_directory import ImportDirectory
+from media_search.application.categories import CategoryService
+from media_search.domain.categories import CategoryReport
+from media_search.api.categories import category_router
 from media_search.application.library import LibraryService
 from media_search.application.search_media import (
     EmptyImageError,
@@ -270,6 +273,18 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       .import-banner {{ padding: 14px; flex-wrap: wrap; }}
       footer .debug {{ text-align: left; }}
     }}
+    .category-form {{ max-width: 680px; display: grid; gap: 16px; margin: 24px 0; padding: 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }}
+    .category-form textarea {{ width: 100%; font: inherit; resize: vertical; padding: 10px; border: 1px solid var(--line); border-radius: 6px; }}
+    .category-form input[type=file] {{ max-width: 100%; }}
+    .category-form button {{ justify-self: start; }}
+    .category-previews {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .category-previews img {{ width: 96px; height: 96px; object-fit: contain; border: 1px solid var(--line); border-radius: 6px; background: white; }}
+    .category-list {{ display: grid; gap: 16px; margin-top: 24px; }}
+    .category-entry {{ border-top: 1px solid var(--line); padding: 20px 0; overflow-wrap: anywhere; }}
+    .category-entry h3 {{ margin: 0 0 8px; }}
+    .category-entry button {{ margin-top: 12px; }}
+    .category-report {{ margin-top: 8px; font-size: .8rem; overflow-wrap: anywhere; }}
+    .view-switch {{ overflow-x: auto; }}
     @keyframes view-in {{ from {{ opacity: .5; }} to {{ opacity: 1; }} }}
     @keyframes status-pulse {{ 50% {{ opacity: .25; }} }}
     @media (prefers-reduced-motion: reduce) {{ *, *::before {{ animation: none !important; }} }}
@@ -296,6 +311,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       <nav class="view-switch" role="tablist" aria-label="表示の切り替え">
         <button id="libraryTab" role="tab" aria-selected="true" aria-controls="libraryPanel">ライブラリ</button>
         <button id="searchTab" role="tab" aria-selected="false" aria-controls="searchPanel" tabindex="-1">検索結果</button>
+        <button id="categoriesTab" role="tab" aria-selected="false" aria-controls="categoriesPanel" tabindex="-1">見本カテゴリ</button>
         <button id="productsTab" role="tab" aria-selected="false" aria-controls="productsPanel" tabindex="-1">商品</button>
       </nav>
       <div class="status-line"><span>状態:</span><p id="status" role="status" aria-live="polite" aria-atomic="true">読み込み中…</p></div>
@@ -349,6 +365,21 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       <div class="collection-heading"><div><h2 id="searchHeading">検索結果</h2><p class="muted">ライブラリ全体から、入力した言葉に近い素材を表示します。</p></div><span id="searchCount" class="muted count"></span></div>
       <div id="out" class="asset-grid" aria-label="検索結果"></div>
     </section>
+    <section id="categoriesPanel" class="view-panel standalone-panel" role="tabpanel" aria-labelledby="categoriesTab" hidden>
+      <div class="collection-heading"><div><h2>見本から、写っているものを分類</h2><p class="muted">カテゴリ名・判定基準・見本画像を登録すると、取り込み時に対象が写っているかをAIが判定します。</p></div></div>
+      <p id="categoryCapability" role="status" class="muted"></p>
+      <form id="categoryForm" class="category-form">
+        <div class="product-field"><label for="categoryName">カテゴリ名</label><input id="categoryName" name="name" maxlength="40" placeholder="例：ポンプ容器" required /></div>
+        <div class="product-field"><label for="categoryCriteria">判定基準</label><textarea id="categoryCriteria" name="criteria" maxlength="300" rows="3" placeholder="例：上部に押して使うポンプが付いた容器が写っている" required></textarea></div>
+        <div class="product-field"><label for="categoryReferences">見本画像（1〜3枚）</label><input id="categoryReferences" name="references" type="file" accept="image/jpeg,image/png" multiple required aria-describedby="categoryHint" /></div>
+        <div id="categoryPreviews" class="category-previews" aria-label="選択した見本画像"></div>
+        <p id="categoryHint" class="muted">JPG・PNG、1枚30MBまで。対象がはっきり写った見本を選んでください。最大5カテゴリ。</p>
+        <button id="saveCategory" type="submit" class="primary">見本カテゴリを登録</button>
+      </form>
+      <p class="muted">登録・削除すると、すべての画像のカテゴリ判定が未判定に戻ります。登録後はライブラリの「再取り込み」で判定してください。AIタグ・手動タグは保持されます。</p>
+      <button id="categoryGoImport" type="button">ライブラリで再取り込みへ</button>
+      <div id="categories" class="category-list" aria-label="登録済みの見本カテゴリ"></div>
+    </section>
     <section id="productsPanel" class="view-panel standalone-panel" role="tabpanel" aria-labelledby="productsTab" hidden>
       <div class="collection-heading"><div><h2>商品</h2><p class="muted">素材に紐づける商品を管理します。登録した商品はアップロード時に選べます。</p></div><span id="productCount" class="muted count"></span></div>
       <form id="productForm" class="product-form">
@@ -388,7 +419,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     const reimportBtn = document.getElementById('reimport');
     const uploadProduct = document.getElementById('uploadProduct');
     const fileInput = document.getElementById('file');
-    const views = ['library', 'search', 'products'];
+    const views = ['library', 'search', 'categories', 'products'];
 
     // API names and IDs are data, including when used in HTML attributes.
     function esc(value) {{
@@ -536,6 +567,83 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         el.onclick = () => runAction(async () => {{ currentFolder = el.dataset.id; await refreshAll(); }});
       }});
     }}
+    let categoryBusy = false;
+    let previewUrls = [];
+    const categoryForm = document.getElementById('categoryForm');
+    const categoryFiles = document.getElementById('categoryReferences');
+    const categoriesEl = document.getElementById('categories');
+    function clearCategoryPreviews() {{
+      previewUrls.forEach(url => URL.revokeObjectURL(url));
+      previewUrls = [];
+      document.getElementById('categoryPreviews').replaceChildren();
+    }}
+    categoryFiles.onchange = () => {{
+      clearCategoryPreviews();
+      const files = Array.from(categoryFiles.files || []);
+      categoryFiles.setCustomValidity(files.length > 3 ? '見本画像は3枚までです' : '');
+      files.slice(0, 3).forEach(file => {{
+        const url = URL.createObjectURL(file);
+        previewUrls.push(url);
+        const img = document.createElement('img');
+        img.src = url; img.alt = file.name;
+        document.getElementById('categoryPreviews').append(img);
+      }});
+    }};
+    function invalidateCategorySearch() {{
+      // A response started before a catalog mutation cannot restore obsolete matches.
+      searchRequest++;
+      resultCount = null;
+      out.removeAttribute('aria-busy');
+      out.innerHTML = emptyState('見本カテゴリを更新しました', '判定内容が変わりました。もう一度検索してください。', 'search', '検索欄へ戻る');
+      document.getElementById('searchCount').textContent = '';
+    }}
+    async function refreshCategories() {{
+      const body = await requestJson('/api/library/categories');
+      document.getElementById('categoryCapability').textContent = body.enabled
+        ? `判定は取り込み時に実行します（1回あたり最大${{body.max_per_import}}枚）。「該当」だけが検索用タグになります。「判定保留」はタグに含めません。`
+        : 'この環境ではAI判定が無効です。見本の登録はできますが、判定にはGeminiの有効化が必要です。';
+      categoriesEl.innerHTML = body.categories.map(c => `<article class="category-entry"><h3>${{esc(c.name)}}</h3><p>${{esc(c.criteria)}}</p><div class="category-previews">${{c.reference_urls.map((url, i) => `<img src="${{esc(url)}}" alt="${{esc(c.name)}}の見本 ${{i + 1}}" loading="lazy" />`).join('')}}</div><button type="button" data-category-delete="${{esc(c.category_id)}}">カテゴリを削除</button></article>`).join('') || '<p class="muted">まだ見本カテゴリがありません。上のフォームから登録してください。</p>';
+      categoriesEl.querySelectorAll('[data-category-delete]').forEach(button => {{
+        button.onclick = () => runAction(async () => {{
+          if (busy || categoryBusy) {{ setStatus('進行中の処理が終わってからお試しください', 'err'); return; }}
+          if (!confirm('カテゴリを削除すると、すべての画像のカテゴリ判定が未判定に戻ります。削除しますか？')) return;
+          categoryBusy = true; button.disabled = true;
+          try {{
+            await requestJson('/api/library/categories/' + encodeURIComponent(button.dataset.categoryDelete), {{method: 'DELETE'}});
+            invalidateCategorySearch();
+            await refreshCategories(); await refreshAssets();
+            setStatus('カテゴリを削除しました。カテゴリ判定は未判定に戻りました', 'ok');
+          }} finally {{ categoryBusy = false; button.disabled = false; }}
+        }});
+      }});
+    }}
+    categoryForm.onsubmit = event => {{
+      event.preventDefault();
+      runAction(async () => {{
+        if (busy || categoryBusy) {{ setStatus('進行中の処理が終わってからお試しください', 'err'); return; }}
+        categoryBusy = true;
+        const controls = Array.from(categoryForm.elements);
+        const data = new FormData(categoryForm);
+        controls.forEach(control => {{ control.disabled = true; }});
+        try {{
+          await requestJson('/api/library/categories', {{method: 'POST', body: data}});
+          invalidateCategorySearch();
+          categoryForm.reset(); clearCategoryPreviews();
+          await refreshCategories(); await refreshAssets();
+          setStatus('見本カテゴリを登録しました。再取り込みで判定してください', 'ok');
+        }} finally {{ categoryBusy = false; controls.forEach(control => {{ control.disabled = false; }}); }}
+      }});
+    }};
+    document.getElementById('categoryGoImport').onclick = () => {{ setView('library'); reimportBtn.focus(); reimportBtn.scrollIntoView({{block: 'center'}}); }};
+    function categoryHtml(asset) {{
+      if (asset.media_type !== 'image') return '';
+      if (asset.category_report) {{
+        const labels = {{match: '該当', no_match: '非該当', uncertain: '判定保留'}};
+        return `<details class="category-report"><summary>見本カテゴリのAI判定</summary>${{asset.category_report.decisions.map(d => `<p><strong>${{esc(d.name)}}：${{labels[d.outcome] || '判定保留'}}</strong><br>${{esc(d.reason)}}</p>`).join('')}}<small class="muted">AIの判定です。商品が同一であることを保証するものではありません。</small></details>`;
+      }}
+      const labels = {{pending: '見本カテゴリは未判定です', failed: 'カテゴリ判定に失敗しました。再取り込みで再試行できます', deferred: 'カテゴリ判定は今回の上限に達しました。再取り込みで続けられます'}};
+      return `<p class="muted category-report">${{labels[asset.category_status] || labels.pending}}</p>`;
+    }}
     function annotationHtml(asset) {{
       if (asset.media_type !== 'image') return '';
       if (asset.annotation) {{
@@ -556,6 +664,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
           <div class="asset-name"><a href="${{esc(url)}}" title="${{esc(name)}}">${{esc(name)}}</a></div>
           <p class="asset-caption"><span class="type-badge">${{asset.media_type === 'video' ? '動画' : '画像'}}</span>${{asset.product_id ? `<span data-product-caption="${{esc(asset.product_id)}}">${{esc(productLabel)}}</span>` : ''}}${{search ? '<span>関連度 ' + Number(asset.score).toFixed(4) + '</span>' : ''}}</p>
           ${{annotationHtml(asset)}}
+          ${{categoryHtml(asset)}}
         </div>
         ${{search ? '' : `<details class="card-menu"><summary aria-label="${{esc(name)}}の操作">⋯</summary><div class="menu-content">
           <button data-ren="${{esc(asset.asset_id)}}" aria-label="${{esc(name)}}の名前を変更">名前変更</button>
@@ -659,7 +768,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     }}
     views.forEach((view, index) => {{
       const tab = document.getElementById(view + 'Tab');
-      tab.onclick = () => setView(view);
+      tab.onclick = () => {{ setView(view); if (view === 'categories') runAction(refreshCategories); }};
       tab.onkeydown = event => {{
         let next;
         if (event.key === 'ArrowRight') next = (index + 1) % views.length;
@@ -669,6 +778,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         else return;
         event.preventDefault();
         setView(views[next]);
+        if (views[next] === 'categories') runAction(refreshCategories);
         document.getElementById(views[next] + 'Tab').focus();
       }};
     }});
@@ -824,6 +934,8 @@ def thumbnail_url_for(*, media_type: str, asset_id: str, best_frame_key: str | N
 
 
 class AnnotationFields(BaseModel):
+    category_report: CategoryReport | None = None
+    category_status: str = "pending"
     annotation: ImageAnnotation | None = None
     annotation_status: str = "pending"
 
@@ -1013,6 +1125,8 @@ def _hits_out(hits) -> list[SearchHitOut]:
                 display_name=h.asset.display_name or h.asset.asset_id,
                 product_id=h.asset.product_id,
                 match_kinds=list(h.match_kinds),
+                category_report=h.asset.category_report,
+                category_status=h.asset.category_status,
                 annotation=h.asset.annotation,
                 annotation_status=h.asset.annotation_status,
             )
@@ -1051,6 +1165,7 @@ def create_app(
     importer: ImportDirectory | None = None,
     import_jobs: ImportJobPort | None = None,
     library: LibraryService | None = None,
+    categories: CategoryService | None = None,
     metadata: MetadataRepositoryPort | None = None,
     media_root: Path | None = None,
     media_storage: MediaStoragePort | None = None,
@@ -1091,6 +1206,9 @@ def create_app(
         yield
 
     app = FastAPI(title="media-search", version="0.1.0", lifespan=lifespan)
+
+    if categories is not None:
+        app.include_router(category_router(categories))
 
     @app.get("/", response_class=HTMLResponse)
     def ui() -> str:
@@ -1273,6 +1391,8 @@ def create_app(
                 best_frame_key=None,
             ),
             product_id=asset.product_id,
+            category_report=asset.category_report,
+            category_status=asset.category_status,
             annotation=asset.annotation,
             annotation_status=asset.annotation_status,
         )
@@ -1480,6 +1600,8 @@ def create_app(
             duration_seconds=asset.duration_seconds,
             tags=list(asset.tags),
             description=asset.description,
+            category_report=asset.category_report,
+            category_status=asset.category_status,
             annotation=asset.annotation,
             annotation_status=asset.annotation_status,
             media_url=f"/media/{asset.asset_id}",

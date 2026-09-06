@@ -24,6 +24,8 @@ from media_search.adapters.sqlite_store import (
     open_db,
 )
 from media_search.api.app import create_app
+from media_search.adapters.sqlite_categories import SqliteCategoryRepository
+from media_search.application.categories import CategoryService
 from media_search.application.import_directory import ImportDirectory
 from media_search.application.library import LibraryService
 from media_search.application.search_media import SearchMediaAssets
@@ -131,6 +133,7 @@ class Runtime:
     folders: SqliteFolderRepository
     products: SqliteProductRepository
     library: LibraryService
+    categories: CategoryService
     import_lock: ImportLockPort
     job_store: FilesystemJobStore | GcsJobStore
     import_jobs: ImportJobPort
@@ -171,6 +174,18 @@ def build_runtime() -> Runtime:
     media_storage = _build_media_storage(data_dir)
     frame_store = _build_frame_store(work_dir, data_dir)
     import_lock = _build_lock(work_dir)
+    category_repository = SqliteCategoryRepository(conn, lock=db_lock)
+    annotator = _build_annotator()
+    classifier = None
+    if annotator is not None:
+        from media_search.adapters.gemini_categories import GeminiCategoryClassifier
+        from media_search.adapters.gemini_annotator import DEFAULT_MODEL
+        classifier = GeminiCategoryClassifier(
+            project=os.environ["GOOGLE_CLOUD_PROJECT"],
+            model=os.environ.get("IMAGE_ANNOTATION_MODEL", DEFAULT_MODEL),
+            location=os.environ.get("IMAGE_ANNOTATION_LOCATION", "global"),
+        )
+    max_classifications = int(os.environ.get("CATEGORY_MAX_PER_IMPORT", "50"))
     importer = ImportDirectory(
         embedder=embedder,
         vectors=vectors,
@@ -178,7 +193,10 @@ def build_runtime() -> Runtime:
         media_probe=LocalMediaProbe(),
         work_dir=work_dir,
         frame_store=frame_store,
-        annotator=_build_annotator(),
+        annotator=annotator,
+        categories=category_repository,
+        classifier=classifier,
+        max_classifications=max_classifications,
         max_annotations=int(os.environ.get("IMAGE_ANNOTATION_MAX_PER_IMPORT", "50")),
     )
 
@@ -213,6 +231,7 @@ def build_runtime() -> Runtime:
             meta.replace_connection(new_conn)
             folders.replace_connection(new_conn)
             products.replace_connection(new_conn)
+            category_repository.replace_connection(new_conn)
             vectors.replace_connection(new_conn)
             active_conn[0] = new_conn
 
@@ -279,6 +298,9 @@ def build_runtime() -> Runtime:
         on_after_mutate=persist,
     )
 
+    categories = CategoryService(repository=category_repository, lock=import_lock,
+                                 enabled=classifier is not None, max_per_import=max_classifications,
+                                 reload_db=reload, persist_db=persist)
     return Runtime(
         embedder_mode=embedder_mode,
         embedder=embedder,
@@ -290,6 +312,7 @@ def build_runtime() -> Runtime:
         folders=folders,
         products=products,
         library=library,
+        categories=categories,
         import_lock=import_lock,
         job_store=job_store,
         import_jobs=import_jobs,
@@ -307,6 +330,7 @@ def build_app():
         importer=rt.importer,
         import_jobs=rt.import_jobs,
         library=rt.library,
+        categories=rt.categories,
         metadata=rt.metadata,
         media_storage=rt.media_storage,
         frame_store=rt.frame_store,

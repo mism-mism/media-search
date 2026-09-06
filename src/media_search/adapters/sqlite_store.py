@@ -74,8 +74,8 @@ class SqliteMetadataRepository:
                 INSERT INTO assets(
                   asset_id, media_type, mime_type, size_bytes, width, height,
                   duration_seconds, tags_json, description, display_name, folder_id,
-                  product_id, annotation_json, annotation_error
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  product_id, annotation_json, annotation_error, category_report_json, category_error
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(asset_id) DO UPDATE SET
                   media_type=excluded.media_type,
                   mime_type=excluded.mime_type,
@@ -89,7 +89,9 @@ class SqliteMetadataRepository:
                   folder_id=excluded.folder_id,
                   product_id=excluded.product_id,
                   annotation_json=excluded.annotation_json,
-                  annotation_error=excluded.annotation_error
+                  annotation_error=excluded.annotation_error,
+                  category_report_json=excluded.category_report_json,
+                  category_error=excluded.category_error
                 """,
                 (
                     asset.asset_id,
@@ -106,6 +108,8 @@ class SqliteMetadataRepository:
                     asset.product_id,
                     _annotation_json(asset.annotation),
                     asset.annotation_error,
+                    _annotation_json(asset.category_report),
+                    asset.category_error,
                 ),
             )
             self._conn.commit()
@@ -161,9 +165,14 @@ class SqliteMetadataRepository:
                      SELECT 1 FROM json_each(assets.annotation_json, '$.tags') AS tag
                      WHERE lower(tag.value) LIKE ? ESCAPE '\\'
                    )
+                   OR EXISTS (
+                     SELECT 1 FROM json_each(assets.category_report_json, '$.decisions') AS decision
+                     WHERE json_extract(decision.value, '$.outcome') = 'match'
+                       AND lower(json_extract(decision.value, '$.name')) LIKE ? ESCAPE '\\'
+                   )
                 ORDER BY asset_id
                 """,
-                (like, like, like, like, like),
+                (like, like, like, like, like, like),
             ).fetchall()
         return [_row_to_asset(r) for r in rows]
 
@@ -337,6 +346,10 @@ class SqliteProductRepository:
 
 def _ensure_annotation_columns(conn: sqlite3.Connection) -> None:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(assets)")}
+    if "category_report_json" not in columns:
+        conn.execute("ALTER TABLE assets ADD COLUMN category_report_json TEXT")
+    if "category_error" not in columns:
+        conn.execute("ALTER TABLE assets ADD COLUMN category_error TEXT NOT NULL DEFAULT ''")
     if "annotation_json" not in columns:
         conn.execute("ALTER TABLE assets ADD COLUMN annotation_json TEXT")
     if "annotation_error" not in columns:
@@ -364,7 +377,15 @@ def _row_to_asset(row: sqlite3.Row) -> MediaAsset:
             tags=tuple(data["tags"]), description=data["description"],
             model_id=data["model_id"], prompt_version=data["prompt_version"],
         )
+    from media_search.domain.categories import CategoryDecision, CategoryReport
+    report = None
+    if "category_report_json" in keys and row["category_report_json"]:
+        data = json.loads(row["category_report_json"])
+        report = CategoryReport(data["catalog_version"], tuple(CategoryDecision(**d) for d in data["decisions"]),
+                                data["model_id"], data["prompt_version"], data.get("image_sha256", ""))
     return MediaAsset(
+        category_report=report,
+        category_error=row["category_error"] if "category_error" in keys else "",
         asset_id=row["asset_id"],
         media_type=MediaType(row["media_type"]),
         mime_type=row["mime_type"],

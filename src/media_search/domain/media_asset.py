@@ -5,6 +5,9 @@ from enum import Enum
 from typing import Optional
 
 
+from media_search.domain.categories import CategoryReport
+
+
 class MediaType(str, Enum):
     IMAGE = "image"
     VIDEO = "video"
@@ -47,10 +50,24 @@ class MediaAsset:
     annotation: Optional[ImageAnnotation] = None
     annotation_error: str = ""
 
+    category_report: Optional[CategoryReport] = None
+    category_error: str = ""
+
+    @property
+    def category_status(self) -> str:
+        if self.media_type != MediaType.IMAGE:
+            return "not_applicable"
+        if self.category_report:
+            return "ready"
+        if self.category_error == "limit_reached":
+            return "deferred"
+        return "failed" if self.category_error else "pending"
+
     @property
     def search_tags(self) -> list[str]:
         generated = self.annotation.tags if self.annotation else ()
-        return list(dict.fromkeys([*self.tags, *generated]))
+        categories = self.category_report.tags if self.category_report else ()
+        return list(dict.fromkeys([*self.tags, *generated, *categories]))
 
     @property
     def annotation_status(self) -> str:
