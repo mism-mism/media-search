@@ -5,17 +5,18 @@ Do not invent numbers. Use `unknown` or `not measured` when unsure.
 
 | Field | Value |
 |-------|-------|
-| Feature | |
-| PR count | |
-| Agent run count | |
-| Human intervention count | |
-| Spec-related failure count | |
-| Harness-related failure count | |
-| Agent self-correction count | |
-| Review loop count | |
-| Time to first working vertical slice | |
-| Time to completion | |
+| Feature | 011-bigquery-vector-search-eval |
+| PR count | 1 |
+| Agent run count | not measured |
+| Human intervention count | 1 (Round 1 採用) |
+| Spec-related failure count | 0 |
+| Harness-related failure count | 0 |
+| Agent self-correction count | not measured |
+| Review loop count | 1 |
+| Time to first working vertical slice | not measured |
+| Time to completion | not measured |
 
 ## Notes
 
+- Live BQ pass required ADC + project; verdict driven by D3 latency bar.
 -

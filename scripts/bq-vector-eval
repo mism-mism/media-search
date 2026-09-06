@@ -1,0 +1,345 @@
+#!/usr/bin/env python3
+"""011 BigQuery Vector Search eval harness.
+
+Passes:
+  local     — OpenCLIP + local cosine (baseline)
+  bq-byo    — OpenCLIP vectors loaded into BigQuery + VECTOR_SEARCH
+  bq-embed  — attempt BQ/Vertex embed generation (skip if not configured)
+
+Usage:
+  ./scripts/bq-vector-eval --pass local
+  ./scripts/bq-vector-eval --pass local --pass bq-byo
+  BQ_DATASET=media_search_eval ./scripts/bq-vector-eval
+
+Env:
+  GOOGLE_CLOUD_PROJECT / GCP_PROJECT
+  BQ_DATASET (default media_search_eval_011)
+  MEDIA_SEARCH_MEDIA_ROOT (default data/corpus-web)
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+OUT = ROOT / "harness" / "eval" / "011-bigquery-vector-search-eval"
+
+
+def _corpus_dir() -> Path:
+    env = os.environ.get("MEDIA_SEARCH_MEDIA_ROOT")
+    if env:
+        return Path(env).resolve()
+    c = ROOT / "data" / "corpus-web"
+    if c.is_dir():
+        return c
+    raise SystemExit("corpus not found; set MEDIA_SEARCH_MEDIA_ROOT")
+
+
+def _project() -> str:
+    return (
+        os.environ.get("GOOGLE_CLOUD_PROJECT")
+        or os.environ.get("GCP_PROJECT")
+        or ""
+    ).strip()
+
+
+def _load_images(corpus: Path) -> list[tuple[str, bytes]]:
+    items: list[tuple[str, bytes]] = []
+    for path in sorted(corpus.iterdir()):
+        if path.suffix.lower() not in {".jpg", ".jpeg", ".png"}:
+            continue
+        items.append((path.name, path.read_bytes()))
+    if not items:
+        raise SystemExit(f"no images in {corpus}")
+    return items
+
+
+def _cosine_top1(
+    query: np.ndarray, ids: list[str], mat: np.ndarray
+) -> tuple[str | None, float]:
+    q = query / max(float(np.linalg.norm(query)), 1e-12)
+    norms = np.linalg.norm(mat, axis=1, keepdims=True)
+    norms = np.maximum(norms, 1e-12)
+    sims = (mat / norms) @ q
+    i = int(np.argmax(sims))
+    return ids[i], float(sims[i])
+
+
+def run_local(corpus: Path) -> dict:
+    from media_search.adapters.openclip_embedder import get_shared_openclip_embedder
+    from media_search.eval.text_image_queries import QUERIES, hit_at_1
+
+    embedder = get_shared_openclip_embedder()
+    images = _load_images(corpus)
+    ids = [a for a, _ in images]
+    t0 = time.perf_counter()
+    mat = np.stack([embedder.embed_image(b) for _, b in images], axis=0)
+    index_s = time.perf_counter() - t0
+
+    hits = 0
+    rows = []
+    t_search = 0.0
+    for qid, qtext, hint in QUERIES:
+        ts = time.perf_counter()
+        qvec = embedder.embed_text(qtext)
+        top, score = _cosine_top1(qvec, ids, mat)
+        t_search += time.perf_counter() - ts
+        ok = hit_at_1(top, hint)
+        hits += int(ok)
+        rows.append(
+            {
+                "id": qid,
+                "q": qtext,
+                "hint": hint,
+                "top": top,
+                "score": score,
+                "hit@1": ok,
+            }
+        )
+    n = len(QUERIES)
+    return {
+        "pass": "local",
+        "model_id": getattr(embedder, "model_id", "openclip"),
+        "n_images": len(images),
+        "n_queries": n,
+        "hit_at_1": hits / n,
+        "hit_at_1_count": hits,
+        "index_wall_seconds": round(index_s, 3),
+        "search_wall_seconds": round(t_search, 3),
+        "search_p95_proxy_seconds": round(t_search / n, 3),
+        "results": rows,
+    }
+
+
+def run_bq_byo(corpus: Path, *, project: str, dataset: str) -> dict:
+    from google.cloud import bigquery
+
+    from media_search.adapters.openclip_embedder import get_shared_openclip_embedder
+    from media_search.eval.text_image_queries import QUERIES, hit_at_1
+
+    embedder = get_shared_openclip_embedder()
+    images = _load_images(corpus)
+    client = bigquery.Client(project=project)
+    ds_id = f"{project}.{dataset}"
+    try:
+        client.create_dataset(bigquery.Dataset(ds_id), exists_ok=True)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "pass": "bq-byo",
+            "status": "skipped",
+            "reason": f"create_dataset failed: {exc}",
+        }
+
+    table_id = f"{ds_id}.embeddings_byo"
+    schema = [
+        bigquery.SchemaField("asset_id", "STRING"),
+        bigquery.SchemaField("embedding", "FLOAT64", mode="REPEATED"),
+    ]
+    table = bigquery.Table(table_id, schema=schema)
+    client.delete_table(table_id, not_found_ok=True)
+    client.create_table(table)
+
+    t0 = time.perf_counter()
+    rows = []
+    for aid, raw in images:
+        vec = embedder.embed_image(raw).astype(float).tolist()
+        rows.append({"asset_id": aid, "embedding": vec})
+    errors = client.insert_rows_json(table_id, rows)
+    if errors:
+        return {
+            "pass": "bq-byo",
+            "status": "failed",
+            "reason": f"insert_rows_json errors: {errors[:3]}",
+        }
+    # Streaming buffer can delay DML/VECTOR_SEARCH; copy to a queryable table.
+    stable = f"{ds_id}.embeddings_byo_stable"
+    client.query(
+        f"CREATE OR REPLACE TABLE `{stable}` AS SELECT * FROM `{table_id}`"
+    ).result()
+    index_s = time.perf_counter() - t0
+
+    hits = 0
+    out_rows = []
+    t_search = 0.0
+    latencies: list[float] = []
+    for qid, qtext, hint in QUERIES:
+        qvec = embedder.embed_text(qtext).astype(float).tolist()
+        # Build literal array for query embedding
+        lit = ", ".join(str(float(x)) for x in qvec)
+        sql = f"""
+        SELECT base.asset_id AS asset_id, distance
+        FROM VECTOR_SEARCH(
+          TABLE `{stable}`,
+          'embedding',
+          (SELECT [{lit}] AS embedding),
+          top_k => 1,
+          distance_type => 'COSINE'
+        )
+        """
+        ts = time.perf_counter()
+        job = client.query(sql)
+        result_rows = list(job.result())
+        elapsed = time.perf_counter() - ts
+        t_search += elapsed
+        latencies.append(elapsed)
+        top = result_rows[0].asset_id if result_rows else None
+        score = float(result_rows[0].distance) if result_rows else None
+        ok = hit_at_1(top, hint)
+        hits += int(ok)
+        out_rows.append(
+            {
+                "id": qid,
+                "q": qtext,
+                "hint": hint,
+                "top": top,
+                "distance": score,
+                "hit@1": ok,
+                "latency_s": round(elapsed, 3),
+            }
+        )
+
+    latencies.sort()
+    p95 = latencies[max(0, int(len(latencies) * 0.95) - 1)] if latencies else None
+    n = len(QUERIES)
+    return {
+        "pass": "bq-byo",
+        "status": "ok",
+        "project": project,
+        "table": stable,
+        "model_id": getattr(embedder, "model_id", "openclip"),
+        "n_images": len(images),
+        "n_queries": n,
+        "hit_at_1": hits / n,
+        "hit_at_1_count": hits,
+        "index_wall_seconds": round(index_s, 3),
+        "search_wall_seconds": round(t_search, 3),
+        "search_p95_seconds": round(p95, 3) if p95 is not None else None,
+        "results": out_rows,
+    }
+
+
+def run_bq_embed_skip() -> dict:
+    """BQ/Vertex embed generation is opt-in; default skip to honor spend + 004."""
+    if os.environ.get("BQ_EMBED_ENABLE", "").strip() not in {"1", "true", "yes"}:
+        return {
+            "pass": "bq-embed",
+            "status": "skipped",
+            "reason": (
+                "Set BQ_EMBED_ENABLE=1 to run AI.GENERATE_EMBEDDING / Vertex remote "
+                "model (spend + 004 interactive-default caution). Default skip keeps "
+                "D6 ceiling and D4 spirit for this bake-off; BYO path covers VECTOR_SEARCH."
+            ),
+        }
+    return {
+        "pass": "bq-embed",
+        "status": "skipped",
+        "reason": "BQ_EMBED_ENABLE set but automated remote-model bootstrap not implemented in 011; use BYO + manual notebook if needed.",
+    }
+
+
+def _product_sample_note() -> dict:
+    """D5: product_id sample — note synthetic fallback from 008 if no library export."""
+    return {
+        "product_id_sample": "not_run",
+        "note": (
+            "No live product_id library export wired in this harness run; "
+            "008 synthetic SKU Recall protocol remains available via scripts/sku-embedder-eval. "
+            "Re-run 011 with a product-tagged corpus when available."
+        ),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--pass",
+        dest="passes",
+        action="append",
+        default=None,
+        help="local | bq-byo | bq-embed (repeatable)",
+    )
+    args = parser.parse_args(argv)
+    passes = args.passes or ["local", "bq-byo", "bq-embed"]
+    corpus = _corpus_dir()
+    OUT.mkdir(parents=True, exist_ok=True)
+    project = _project()
+    dataset = os.environ.get("BQ_DATASET", "media_search_eval_011").strip()
+
+    summary: dict = {
+        "corpus": str(corpus),
+        "passes": [],
+        "product_sample": _product_sample_note(),
+    }
+
+    for name in passes:
+        print(f"running pass={name} …", flush=True)
+        if name == "local":
+            result = run_local(corpus)
+        elif name == "bq-byo":
+            if not project:
+                result = {
+                    "pass": "bq-byo",
+                    "status": "skipped",
+                    "reason": "GOOGLE_CLOUD_PROJECT not set",
+                }
+            else:
+                result = run_bq_byo(corpus, project=project, dataset=dataset)
+        elif name == "bq-embed":
+            result = run_bq_embed_skip()
+        else:
+            raise SystemExit(f"unknown pass {name}")
+        summary["passes"].append(result)
+        out = OUT / f"results-{name}.json"
+        out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps({k: result.get(k) for k in (
+            "pass", "status", "hit_at_1", "search_p95_seconds",
+            "search_p95_proxy_seconds", "reason",
+        ) if k in result or result.get(k) is not None}, ensure_ascii=False), flush=True)
+
+    by = {p["pass"]: p for p in summary["passes"]}
+    local = by.get("local")
+    bq = by.get("bq-byo")
+    verdict = "inconclusive"
+    detail = "need local + bq-byo"
+    if local and bq and bq.get("status") == "ok":
+        p95 = bq.get("search_p95_seconds")
+        quality_ok = abs(float(bq["hit_at_1"]) - float(local["hit_at_1"])) <= 0.1
+        # D3: interactive cutover needs p95 < 1s
+        if p95 is not None and p95 >= 1.0:
+            verdict = "no-go-interactive"
+            detail = (
+                f"bq-byo search p95={p95}s ≥ 1s (D3); quality hit@1="
+                f"{bq['hit_at_1']:.2f} vs local {local['hit_at_1']:.2f}"
+            )
+        elif quality_ok and p95 is not None and p95 < 1.0:
+            verdict = "go-candidate"
+            detail = f"bq-byo p95={p95}s <1s and quality ~local"
+        else:
+            verdict = "no-go-interactive"
+            detail = (
+                f"bq-byo not suitable as interactive default "
+                f"(p95={p95}, hit@1={bq.get('hit_at_1')} vs local {local.get('hit_at_1')})"
+            )
+    elif bq and bq.get("status") != "ok":
+        verdict = "blocked"
+        detail = f"bq-byo {bq.get('status')}: {bq.get('reason')}"
+
+    summary["verdict"] = verdict
+    summary["verdict_detail"] = detail
+    (OUT / "summary.json").write_text(
+        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"verdict={verdict}: {detail}", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

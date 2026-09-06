@@ -1,0 +1,173 @@
+{
+  "pass": "local",
+  "model_id": "open_clip:xlm-roberta-base-ViT-B-32/laion5b_s13b_b90k",
+  "n_images": 18,
+  "n_queries": 20,
+  "hit_at_1": 0.9,
+  "hit_at_1_count": 18,
+  "index_wall_seconds": 0.528,
+  "search_wall_seconds": 0.654,
+  "search_p95_proxy_seconds": 0.033,
+  "results": [
+    {
+      "id": "en01",
+      "q": "a cat",
+      "hint": "01-cat",
+      "top": "01-cat.jpg",
+      "score": 0.24509647488594055,
+      "hit@1": true
+    },
+    {
+      "id": "en02",
+      "q": "a dog",
+      "hint": "02-dog",
+      "top": "02-dog.jpg",
+      "score": 0.22370760142803192,
+      "hit@1": true
+    },
+    {
+      "id": "en03",
+      "q": "sandy beach ocean",
+      "hint": "03-beach",
+      "top": "03-beach.jpg",
+      "score": 0.2471488118171692,
+      "hit@1": true
+    },
+    {
+      "id": "en04",
+      "q": "red sports car",
+      "hint": "17-car",
+      "top": "17-car.jpg",
+      "score": 0.1411350965499878,
+      "hit@1": true
+    },
+    {
+      "id": "en05",
+      "q": "plate of food",
+      "hint": "16-food",
+      "top": "16-food.jpg",
+      "score": 0.20020633935928345,
+      "hit@1": true
+    },
+    {
+      "id": "en06",
+      "q": "mountain landscape",
+      "hint": "04-mountain",
+      "top": "04-mountain.jpg",
+      "score": 0.22720830142498016,
+      "hit@1": true
+    },
+    {
+      "id": "en07",
+      "q": "kitchen interior",
+      "hint": "18-kitchen",
+      "top": "20-market.jpg",
+      "score": 0.1969948410987854,
+      "hit@1": false
+    },
+    {
+      "id": "en08",
+      "q": "desert sand dunes",
+      "hint": "12-desert",
+      "top": "12-desert.jpg",
+      "score": 0.19426104426383972,
+      "hit@1": true
+    },
+    {
+      "id": "en09",
+      "q": "bridge over water",
+      "hint": "10-bridge",
+      "top": "10-bridge.jpg",
+      "score": 0.23446576297283173,
+      "hit@1": true
+    },
+    {
+      "id": "en10",
+      "q": "colorful flower",
+      "hint": "07-flower",
+      "top": "07-flower.jpg",
+      "score": 0.2004755735397339,
+      "hit@1": true
+    },
+    {
+      "id": "ja01",
+      "q": "\u732b",
+      "hint": "01-cat",
+      "top": "01-cat.jpg",
+      "score": 0.24678894877433777,
+      "hit@1": true
+    },
+    {
+      "id": "ja02",
+      "q": "\u72ac",
+      "hint": "02-dog",
+      "top": "02-dog.jpg",
+      "score": 0.22856810688972473,
+      "hit@1": true
+    },
+    {
+      "id": "ja03",
+      "q": "\u7802\u6d5c",
+      "hint": "03-beach",
+      "top": "03-beach.jpg",
+      "score": 0.21219992637634277,
+      "hit@1": true
+    },
+    {
+      "id": "ja04",
+      "q": "\u8d64\u3044\u8eca",
+      "hint": "17-car",
+      "top": "17-car.jpg",
+      "score": 0.12946003675460815,
+      "hit@1": true
+    },
+    {
+      "id": "ja05",
+      "q": "\u6599\u7406",
+      "hint": "16-food",
+      "top": "16-food.jpg",
+      "score": 0.17332696914672852,
+      "hit@1": true
+    },
+    {
+      "id": "ja06",
+      "q": "\u5c71\u306e\u666f\u8272",
+      "hint": "04-mountain",
+      "top": "04-mountain.jpg",
+      "score": 0.1884637326002121,
+      "hit@1": true
+    },
+    {
+      "id": "ja07",
+      "q": "\u30ad\u30c3\u30c1\u30f3",
+      "hint": "18-kitchen",
+      "top": "20-market.jpg",
+      "score": 0.1308629810810089,
+      "hit@1": false
+    },
+    {
+      "id": "ja08",
+      "q": "\u7802\u6f20",
+      "hint": "12-desert",
+      "top": "12-desert.jpg",
+      "score": 0.19099459052085876,
+      "hit@1": true
+    },
+    {
+      "id": "ja09",
+      "q": "\u6a4b",
+      "hint": "10-bridge",
+      "top": "10-bridge.jpg",
+      "score": 0.1892358958721161,
+      "hit@1": true
+    },
+    {
+      "id": "ja10",
+      "q": "\u82b1",
+      "hint": "07-flower",
+      "top": "07-flower.jpg",
+      "score": 0.20563796162605286,
+      "hit@1": true
+    }
+  ]
+}

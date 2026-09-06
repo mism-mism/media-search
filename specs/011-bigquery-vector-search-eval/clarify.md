@@ -2,39 +2,34 @@
 
 ## Ambiguities
 
-Human interest (2026-09-06): [BigQuery vector search intro](https://docs.cloud.google.com/bigquery/docs/vector-search-intro)
-looks promising for durable scale vs GCS-synced sqlite. Need Round 1 lock on
-**what to evaluate** (search vs embed-only) and relationship to **004 Vertex
-no-go** before any spike.
+Human interest (2026-09-06): BigQuery vector search vs GCS-synced sqlite.
+Round 1 locked same day.
 
 ## Questions
 
 | ID | Question | Options | Status |
 |----|----------|---------|--------|
-| Q1 | 011 scope | A **eval + go/no-go only** / B eval + non-default adapter spike / C implement cutover | unresolved → rec **A** |
-| Q2 | What moves to BQ first? | A search + index only (BYO vectors) / B embed+index via `AI.GENERATE_EMBEDDING` / C **both passes compared** | unresolved → rec **C** |
-| Q3 | Interactive search latency bar | A warm p95 &lt;1s must hold on BQ / B &lt;3s OK / C batch/analytics OK, UI stays sqlite | unresolved → rec **A** (fail BQ for UI if missed) |
-| Q4 | vs 004 Vertex no-go | A keep: no Vertex as Cloud Run default; BQ batch embed OK to eval / B reopen Vertex for interactive / C BQ only with non-Vertex vectors | unresolved → rec **A** |
-| Q5 | Corpus | A current ~18 + fixed queries (004-like) / B library sample with product_id / C both | unresolved → rec **C** |
-| Q6 | Spend ceiling | A **≤ few tens USD** / B no cap / C dry-run docs only | unresolved → rec **A** |
-| Q7 | Profile | A lean / B **full** | unresolved → rec **B** |
+| Q1 | 011 scope | A **eval + go/no-go only** / B spike / C cutover | resolved → **A** |
+| Q2 | What moves to BQ | A BYO only / B BQ embed only / C **both compared** | resolved → **C** |
+| Q3 | Interactive latency | A **warm p95 &lt;1s** or no-go for UI default / B &lt;3s / C UI stays sqlite | resolved → **A** |
+| Q4 | vs 004 | A **keep: no Vertex interactive default; BQ batch OK to eval** / B reopen / C non-Vertex only | resolved → **A** |
+| Q5 | Corpus | A 004-like / B product_id sample / C **both** | resolved → **C** |
+| Q6 | Spend | A **≤ few tens USD** / B no cap / C dry-run | resolved → **A** |
+| Q7 | Profile | A lean / B **full** | resolved → **B** |
 
 ## Decisions
 
 | ID | Decision | Decided by | Date |
 |----|----------|------------|------|
-| D0 | Ticket 011 as **evaluation** of BigQuery Vector Search vs current path | Human | 2026-09-06 |
+| D0 | 011 = BigQuery Vector Search **evaluation** | Human | 2026-09-06 |
+| D1 | Eval + go/no-go only — no production cutover | Human | 2026-09-06 |
+| D2 | Compare **BYO OpenCLIP→BQ** and **BQ/Vertex embed** paths | Human | 2026-09-06 |
+| D3 | Interactive default requires warm p95 &lt;1s; else no-go for UI cutover | Human | 2026-09-06 |
+| D4 | Keep 004 spirit: no Vertex as Cloud Run interactive default | Human | 2026-09-06 |
+| D5 | Corpus: 004-like set **and** product_id sample when available | Human | 2026-09-06 |
+| D6 | Spend ceiling ≈ **few tens USD** | Human | 2026-09-06 |
+| D7 | profile = **full** | Human | 2026-09-06 |
 
 ## Unresolved items
 
-Lock Round 1 (Q1–Q7) before implementation.
-
-Recommended package: **A C A A C A B**
-
-- **D1** Eval + go/no-go only
-- **D2** Compare (i) BYO OpenCLIP vectors in BQ and (ii) BQ/Vertex embed path
-- **D3** UI path must still meet warm p95 &lt;1s or BQ is no-go for interactive default
-- **D4** Keep 004 spirit: no Vertex as Cloud Run interactive default; batch-via-BQ may be evaluated
-- **D5** Corpus = 004-like set **and** a product_id library sample if available
-- **D6** Spend ≤ few tens USD
-- **D7** profile = full
+None for Domain / Constraints / Acceptance Criteria.
