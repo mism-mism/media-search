@@ -124,7 +124,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     #crumb {{ font-size: .95rem; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }}
     .count {{ white-space: nowrap; font-variant-numeric: tabular-nums; }}
     .upload-toolbar {{ display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }}
-    #upload {{ display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; }}
+    #upload {{ display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin-left: auto; }}
     #upload svg {{ width: 18px; height: 18px; }}
     .file-picker {{ position: relative; flex-shrink: 0; }}
     .file-picker input {{ position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }}
@@ -276,11 +276,11 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       <div class="workspace">
         <div class="collection-heading"><h2 id="crumb">ライブラリ / 直下</h2><span id="count" class="muted count"></span></div>
         <div id="uploadToolbar" class="upload-toolbar" role="group" aria-label="現在のフォルダに素材を追加">
-          <button id="upload" class="primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/></svg>アップロード</button>
-          <label class="sr-only" for="uploadProduct">紐づける商品（任意）</label>
-          <select id="uploadProduct"><option value="">商品を選ぶ（任意）</option></select>
           <div class="file-picker"><label for="file">ファイルを選択</label><input id="file" type="file" accept=".jpg,.jpeg,.png,.mp4" multiple aria-describedby="fileName uploadHint" /></div>
           <span id="fileName" class="muted">未選択</span>
+          <label class="sr-only" for="uploadProduct">紐づける商品（任意）</label>
+          <select id="uploadProduct"><option value="">商品を選ぶ（任意）</option></select>
+          <button id="upload" class="primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/></svg>アップロード</button>
         </div>
         <p id="uploadHint" class="muted upload-hint">JPG・PNG・MP4 ／ 複数選択できます。商品を紐づけて、現在のフォルダにアップロード。</p>
         <div id="assets" class="asset-grid" aria-label="ライブラリの素材" aria-busy="true"></div>
