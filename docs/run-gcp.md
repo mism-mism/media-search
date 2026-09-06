@@ -152,3 +152,8 @@ FEATURE=002-gcp-deployment ./scripts/verify
 `allow_unauthenticated=false` + browser smoke with your allowlisted Gmail.
 See [`run-gcp-iap.md`](run-gcp-iap.md).
 
+
+## Japanese image tags
+
+See [image auto-tags setup and testing](image-auto-tags.md) for Gemini IAM, import limits,
+existing-image enrichment, and enable/disable settings. Vectors remain OpenCLIP.

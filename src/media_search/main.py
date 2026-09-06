@@ -27,6 +27,7 @@ from media_search.api.app import create_app
 from media_search.application.import_directory import ImportDirectory
 from media_search.application.library import LibraryService
 from media_search.application.search_media import SearchMediaAssets
+from media_search.ports.annotation import ImageAnnotationPort
 from media_search.ports.embedding import FakeEmbedder
 from media_search.ports.frame_store import FrameStorePort
 from media_search.ports.import_job import ImportJobPort
@@ -43,6 +44,24 @@ def _build_embedder():
 
         return name, LazyOpenClipEmbedder()
     raise SystemExit(f"unsupported EMBEDDER={name!r}")
+
+
+def _build_annotator() -> ImageAnnotationPort | None:
+    backend = os.environ.get("IMAGE_ANNOTATION_BACKEND", "off").strip().lower()
+    if backend == "off":
+        return None
+    if backend != "gemini":
+        raise ValueError(f"unsupported IMAGE_ANNOTATION_BACKEND={backend!r}")
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
+    if not project:
+        raise ValueError("GOOGLE_CLOUD_PROJECT is required for Gemini annotation")
+    from media_search.adapters.gemini_annotator import DEFAULT_MODEL, GeminiImageAnnotator
+
+    return GeminiImageAnnotator(
+        project=project,
+        model=os.environ.get("IMAGE_ANNOTATION_MODEL", DEFAULT_MODEL),
+        location=os.environ.get("IMAGE_ANNOTATION_LOCATION", "global"),
+    )
 
 
 def _build_media_storage(data_dir: Path) -> MediaStoragePort:
@@ -159,6 +178,8 @@ def build_runtime() -> Runtime:
         media_probe=LocalMediaProbe(),
         work_dir=work_dir,
         frame_store=frame_store,
+        annotator=_build_annotator(),
+        max_annotations=int(os.environ.get("IMAGE_ANNOTATION_MAX_PER_IMPORT", "50")),
     )
 
     # Mutable cell so persist/reload always use the active sqlite connection.

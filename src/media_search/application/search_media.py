@@ -124,7 +124,7 @@ class SearchMediaAssets:
             asset = acc.asset
             if query.media_type is not None and asset.media_type != query.media_type:
                 continue
-            if query.tags and not _tags_include_all(asset.tags, query.tags):
+            if query.tags and not _tags_include_all(asset.search_tags, query.tags):
                 continue
             if query.product_id is not None:
                 if (asset.product_id or "") != query.product_id:

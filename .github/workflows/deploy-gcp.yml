@@ -17,6 +17,14 @@ on:
         required: true
         default: latest
         type: string
+      image_annotation_backend:
+        description: "Image auto-tags (Gemini requires the documented Vertex AI IAM permission)"
+        required: true
+        default: gemini
+        type: choice
+        options:
+          - gemini
+          - off
       allow_unauthenticated:
         description: "true = public (non-prod only); false = IAP/prod (do not use public for production)"
         required: true
@@ -37,6 +45,7 @@ jobs:
       PROJECT_ID: ${{ inputs.project_id }}
       REGION: ${{ inputs.region }}
       IMAGE_TAG: ${{ inputs.image_tag }}
+      IMAGE_ANNOTATION_BACKEND: ${{ inputs.image_annotation_backend }}
       ALLOW_UNAUTH: ${{ inputs.allow_unauthenticated }}
     steps:
       - uses: actions/checkout@v4
@@ -84,7 +93,7 @@ jobs:
             --port=8080 \
             --min-instances=1 \
             --no-cpu-throttling \
-            --update-env-vars="EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,IMPORT_JOB_BACKEND=cloudrun,CLOUD_RUN_IMPORT_JOB=media-search-import,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},CLOUD_RUN_REGION=${REGION},GCS_BUCKET=media-search-${PROJECT_ID}-media,MEDIA_SEARCH_DB_GCS=gs://media-search-${PROJECT_ID}-media/state/media-local-cos.db"
+            --update-env-vars="IMAGE_ANNOTATION_BACKEND=${IMAGE_ANNOTATION_BACKEND},IMAGE_ANNOTATION_MODEL=gemini-3.1-flash-lite,IMAGE_ANNOTATION_LOCATION=global,IMAGE_ANNOTATION_MAX_PER_IMPORT=50,EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,IMPORT_JOB_BACKEND=cloudrun,CLOUD_RUN_IMPORT_JOB=media-search-import,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},CLOUD_RUN_REGION=${REGION},GCS_BUCKET=media-search-${PROJECT_ID}-media,MEDIA_SEARCH_DB_GCS=gs://media-search-${PROJECT_ID}-media/state/media-local-cos.db"
           SA=$(gcloud run services describe media-search \
             --project="$PROJECT_ID" --region="$REGION" \
             --format='value(spec.template.spec.serviceAccountName)')
@@ -105,7 +114,7 @@ jobs:
             --max-retries=0 \
             --command=python \
             --args=-m,media_search.worker_import \
-            --set-env-vars="IMPORT_MODE=worker,EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_BUCKET=media-search-${PROJECT_ID}-media,GCS_PREFIX=incoming,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_DB_GCS=gs://media-search-${PROJECT_ID}-media/state/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},CLOUD_RUN_REGION=${REGION},IMPORT_EMBED_WORKERS=4"
+            --set-env-vars="IMAGE_ANNOTATION_BACKEND=${IMAGE_ANNOTATION_BACKEND},IMAGE_ANNOTATION_MODEL=gemini-3.1-flash-lite,IMAGE_ANNOTATION_LOCATION=global,IMAGE_ANNOTATION_MAX_PER_IMPORT=50,IMPORT_MODE=worker,EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_BUCKET=media-search-${PROJECT_ID}-media,GCS_PREFIX=incoming,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_DB_GCS=gs://media-search-${PROJECT_ID}-media/state/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},CLOUD_RUN_REGION=${REGION},IMPORT_EMBED_WORKERS=4"
           # Best-effort IAP enable when not public (ignore if API/CLI shape differs)
           if [[ "$ALLOW_UNAUTH" != "true" ]]; then
             gcloud beta run services update media-search \
