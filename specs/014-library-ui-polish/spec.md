@@ -13,7 +13,7 @@ profile_reason: "Presentation-only UI; same APIs"
 
 ## Goal
 
-Redesign Library UI per `docs/design/014-library-ui.md` (IA + 暗室アーカイブ).
+Redesign Library UI per `docs/design/014-library-ui.md` v2 (DAM IA + スタジオライト).
 
 ## User
 
