@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol
+from typing import Protocol, Sequence
 
 
 class ImportJobStatus(str, Enum):
@@ -30,13 +30,14 @@ class ImportJobRecord:
     imported: list[str] = field(default_factory=list)
     updated: list[str] = field(default_factory=list)
     skipped: list[ImportJobSkipped] = field(default_factory=list)
+    only_keys: list[str] = field(default_factory=list)
     error: str | None = None
 
 
 class ImportJobPort(Protocol):
     """Enqueue and observe async import work."""
 
-    def enqueue(self) -> ImportJobRecord:
+    def enqueue(self, *, only_keys: Sequence[str] | None = None) -> ImportJobRecord:
         """Start a job or raise ImportLockBusy if a writer is active."""
 
     def get(self, job_id: str) -> ImportJobRecord | None: ...

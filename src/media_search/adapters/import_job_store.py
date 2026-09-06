@@ -28,6 +28,7 @@ def job_to_dict(job: ImportJobRecord) -> dict:
         "imported": list(job.imported),
         "updated": list(job.updated),
         "skipped": [{"path": s.path, "reason": s.reason} for s in job.skipped],
+        "only_keys": list(job.only_keys),
         "error": job.error,
     }
 
@@ -47,6 +48,7 @@ def job_from_dict(data: dict) -> ImportJobRecord:
             ImportJobSkipped(path=s["path"], reason=s["reason"])
             for s in (data.get("skipped") or [])
         ],
+        only_keys=list(data.get("only_keys") or []),
         error=data.get("error"),
     )
 
@@ -61,7 +63,9 @@ class FilesystemJobStore:
         safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in job_id)
         return self._root / f"{safe}.json"
 
-    def create(self, holder: str) -> ImportJobRecord:
+    def create(
+        self, holder: str, *, only_keys: list[str] | None = None
+    ) -> ImportJobRecord:
         now = _now()
         job = ImportJobRecord(
             job_id=str(uuid.uuid4()),
@@ -69,6 +73,7 @@ class FilesystemJobStore:
             holder=holder,
             created_at=now,
             updated_at=now,
+            only_keys=list(only_keys or []),
         )
         self.save(job)
         return job
@@ -106,7 +111,9 @@ class GcsJobStore:
     def _latest_blob(self):
         return self._bucket.blob(f"{self._prefix}/latest.txt")
 
-    def create(self, holder: str) -> ImportJobRecord:
+    def create(
+        self, holder: str, *, only_keys: list[str] | None = None
+    ) -> ImportJobRecord:
         now = _now()
         job = ImportJobRecord(
             job_id=str(uuid.uuid4()),
@@ -114,6 +121,7 @@ class GcsJobStore:
             holder=holder,
             created_at=now,
             updated_at=now,
+            only_keys=list(only_keys or []),
         )
         self.save(job)
         return job

@@ -36,6 +36,10 @@ class VectorSearchPort(Protocol):
 
     def delete_asset_frames(self, asset_id: str) -> None: ...
 
+    def has_frames(self, asset_id: str) -> bool:
+        """True if at least one indexed frame exists for the asset."""
+        ...
+
     def search(
         self,
         *,

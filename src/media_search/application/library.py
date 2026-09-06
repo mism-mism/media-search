@@ -172,7 +172,7 @@ class LibraryService:
         self._persist()
         job = None
         if enqueue and self._import_jobs is not None:
-            job = self._import_jobs.enqueue()
+            job = self._import_jobs.enqueue(only_keys=[asset_id])
         return asset, job
 
     def upload_many(
@@ -199,7 +199,9 @@ class LibraryService:
             assets.append(asset)
         job = None
         if self._import_jobs is not None:
-            job = self._import_jobs.enqueue()
+            job = self._import_jobs.enqueue(
+                only_keys=[a.asset_id for a in assets]
+            )
         return assets, job
 
     def rename(self, asset_id: str, display_name: str) -> MediaAsset:

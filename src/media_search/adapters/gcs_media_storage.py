@@ -40,6 +40,14 @@ class GcsMediaStorage:
     def exists(self, key: str) -> bool:
         return self._bucket.blob(self._blob_name(key)).exists()
 
+    def size_bytes(self, key: str) -> int:
+        blob = self._bucket.blob(self._blob_name(key))
+        blob.reload()
+        size = blob.size
+        if size is None:
+            raise FileNotFoundError(key)
+        return int(size)
+
     def read_bytes(self, key: str) -> bytes:
         return self._bucket.blob(self._blob_name(key)).download_as_bytes()
 

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from media_search.adapters.import_job_store import FilesystemJobStore, GcsJobStore
-from media_search.application.import_directory import ImportDirectory, ImportSummary
-from media_search.ports.import_job import ImportJobPort, ImportJobRecord, ImportJobSkipped, ImportJobStatus
+from media_search.application.import_directory import ImportDirectory
+from media_search.ports.import_job import (
+    ImportJobPort,
+    ImportJobRecord,
+    ImportJobSkipped,
+    ImportJobStatus,
+)
 from media_search.ports.import_lock import ImportLockBusy, ImportLockPort
 from media_search.ports.media_storage import MediaStoragePort
 
@@ -32,19 +37,22 @@ class LocalThreadImportJobs(ImportJobPort):
         self._run_inline = run_inline
         self._threads: dict[str, threading.Thread] = {}
 
-    def enqueue(self) -> ImportJobRecord:
+    def enqueue(self, *, only_keys: Sequence[str] | None = None) -> ImportJobRecord:
         holder = f"local-{threading.get_ident()}"
         current = self._lock.current_holder()
         if current is not None:
             raise ImportLockBusy(current)
         if not self._lock.try_acquire(holder):
             raise ImportLockBusy(self._lock.current_holder() or "unknown")
-        job = self._store.create(holder)
+        job = self._store.create(holder, only_keys=list(only_keys or []))
         if self._run_inline:
             self._run(job.job_id, holder)
             return self._store.get(job.job_id) or job
         t = threading.Thread(
-            target=self._run, args=(job.job_id, holder), daemon=True, name=f"import-{job.job_id}"
+            target=self._run,
+            args=(job.job_id, holder),
+            daemon=True,
+            name=f"import-{job.job_id}",
         )
         self._threads[job.job_id] = t
         t.start()
@@ -64,8 +72,12 @@ class LocalThreadImportJobs(ImportJobPort):
         job.status = ImportJobStatus.RUNNING
         self._store.save(job)
         try:
-            keys = self._storage.list_media_keys()
-            job.total = len(keys)
+            only = list(job.only_keys) if job.only_keys else None
+            if only is None:
+                keys = self._storage.list_media_keys()
+                job.total = len(keys)
+            else:
+                job.total = len(only)
             self._store.save(job)
 
             def on_progress(processed: int, total: int) -> None:
@@ -77,7 +89,7 @@ class LocalThreadImportJobs(ImportJobPort):
                 self._store.save(cur)
 
             summary = self._importer.execute_storage(
-                self._storage, on_progress=on_progress
+                self._storage, only_keys=only, on_progress=on_progress
             )
             job = self._store.get(job_id) or job
             job.status = ImportJobStatus.SUCCEEDED
@@ -119,13 +131,13 @@ class CloudRunImportJobs(ImportJobPort):
         self._region = region
         self._job_name = job_name
 
-    def enqueue(self) -> ImportJobRecord:
+    def enqueue(self, *, only_keys: Sequence[str] | None = None) -> ImportJobRecord:
         holder = f"cloudrun-job:{self._job_name}"
         current = self._lock.current_holder()
         if current is not None:
             raise ImportLockBusy(current)
         # Soft-check only; worker acquires the real lock.
-        job = self._store.create(holder)
+        job = self._store.create(holder, only_keys=list(only_keys or []))
         try:
             self._start_execution(job.job_id)
         except Exception as exc:  # noqa: BLE001

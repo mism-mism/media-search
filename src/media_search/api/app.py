@@ -624,6 +624,7 @@ def create_app(
     frame_root: Path | None = None,
     frame_store: FrameStorePort | None = None,
     on_after_import: Callable[[], None] | None = None,
+    on_db_reload: Callable[[], None] | None = None,
     embedder_mode: str = "unknown",
     embedder_id: str = "unknown",
 ) -> FastAPI:
@@ -635,6 +636,20 @@ def create_app(
         from media_search.adapters.local_frame_store import LocalFrameStore
 
         frame_store = LocalFrameStore(frame_root)
+
+    reloaded_jobs: set[str] = set()
+
+    def _maybe_reload_db(job) -> None:
+        if on_db_reload is None or job is None:
+            return
+        status = job.status
+        if isinstance(status, ImportJobStatus):
+            ok = status == ImportJobStatus.SUCCEEDED
+        else:
+            ok = str(status) == ImportJobStatus.SUCCEEDED.value
+        if ok and job.job_id not in reloaded_jobs:
+            on_db_reload()
+            reloaded_jobs.add(job.job_id)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -785,6 +800,7 @@ def create_app(
         job = import_jobs.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
+        _maybe_reload_db(job)
         return _job_out(job)
 
     @app.get("/api/import/status", response_model=ImportJobOut)
@@ -794,6 +810,7 @@ def create_app(
         job = import_jobs.latest()
         if job is None:
             raise HTTPException(status_code=404, detail="no import jobs")
+        _maybe_reload_db(job)
         return _job_out(job)
 
     @app.get("/api/stats", response_model=StatsOut)

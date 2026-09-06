@@ -13,6 +13,10 @@ class MediaStoragePort(Protocol):
 
     def exists(self, key: str) -> bool: ...
 
+    def size_bytes(self, key: str) -> int:
+        """Object size without downloading body (when possible)."""
+        ...
+
     def read_bytes(self, key: str) -> bytes: ...
 
     def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
