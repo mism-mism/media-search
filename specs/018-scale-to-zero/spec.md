@@ -1,6 +1,6 @@
 ---
 id: "018"
-status: active
+status: completed
 profile: lean
 profile_reason: "Deployment resource policy only; no domain, architecture, API, or security boundary change"
 ---

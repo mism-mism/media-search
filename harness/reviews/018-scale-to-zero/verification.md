@@ -54,3 +54,8 @@ delta all passed. Subsequent post-implement, pre-review and explicit feature
 verify passed. Installed `gcloud run deploy --help` also advertises both
 `--max` and `--max-instances`. No application or provider requirement change
 is included in this follow-up.
+
+The updated implementation was committed as `80029d2`; pre-merge passed before
+push. [GitHub verify run 34044607468](https://github.com/mism-mism/media-search/actions/runs/34044607468)
+passed for that commit. PR #21 remains open and unmerged, with its description
+updated to include maximum-one behavior and the Terraform 6.x limitation.
