@@ -37,235 +37,271 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#141618" />
-  <title>暗室アーカイブ — media-search</title>
+  <meta name="theme-color" content="#f4f5f7" />
+  <title>メディアライブラリ — media-search</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&family=Zen+Old+Mincho:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&family=Fraunces:wght@500;600&display=swap" rel="stylesheet" />
   <style>
     :root {{
-      color-scheme: dark;
-      --bg: #141618; --surface: #1e2124; --text: #ece8e1; --muted: #9a958c;
-      --accent: #e2a15a; --danger: #d9786a; --line: #373a3c;
+      color-scheme: light;
+      --bg: #f4f5f7; --surface: #ffffff; --text: #1a1d21; --muted: #5c6570;
+      --line: #e2e5ea; --accent: #126b5f; --accent-soft: #e6f3f0; --warn: #9a6700; --danger: #b42318;
       font-family: 'IBM Plex Sans JP', sans-serif; color: var(--text); background: var(--bg);
     }}
     * {{ box-sizing: border-box; }}
     [hidden] {{ display: none !important; }}
     body {{ margin: 0; min-width: 320px; }}
-    body::before {{
-      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1; opacity: .12;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23fff' filter='url(%23grain)' opacity='.25' d='M0 0h180v180H0z'/%3E%3C/svg%3E");
-    }}
-    button, input, select {{ font: inherit; font-size: .82rem; border-radius: 4px; }}
+    button, input, select {{ font: inherit; font-size: .875rem; border-radius: 6px; }}
     button, select {{ cursor: pointer; }}
-    button {{ min-height: 38px; padding: .5rem .75rem; color: var(--text); border: 1px solid var(--line); background: transparent; }}
-    button:hover {{ background: #2b2e31; border-color: var(--muted); }}
-    button:disabled {{ cursor: wait; opacity: .5; }}
-    input, select {{ min-width: 0; min-height: 40px; padding: .55rem .7rem; color: var(--text); background: var(--bg); border: 1px solid var(--line); }}
+    button {{ min-height: 40px; padding: .55rem .85rem; color: var(--text); border: 1px solid var(--line); background: var(--surface); }}
+    button:hover {{ border-color: var(--muted); background: var(--bg); }}
+    button:disabled, input:disabled, select:disabled {{ cursor: wait; opacity: .55; }}
+    button.primary {{ background: var(--accent); color: white; border-color: var(--accent); font-weight: 500; }}
+    button.primary:hover {{ background: #0d574d; }}
+    input, select {{ min-width: 0; min-height: 42px; padding: .6rem .75rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); }}
     input::placeholder {{ color: var(--muted); opacity: 1; }}
-    :focus-visible {{ outline: 2px solid var(--accent); outline-offset: 4px; }}
+    :focus-visible {{ outline: 2px solid var(--accent); outline-offset: 3px; }}
     a {{ color: inherit; text-decoration: none; }}
     a:hover {{ text-decoration: underline; text-underline-offset: 4px; }}
     h1, h2, p {{ margin: 0; }}
-    code, .mono {{ font-family: ui-monospace, monospace; font-size: .7rem; overflow-wrap: anywhere; }}
-    .muted {{ color: var(--muted); font-size: .78rem; line-height: 1.8; }}
+    h1 {{ font-size: 1.45rem; font-weight: 600; letter-spacing: .025em; }}
+    h2 {{ font-size: 1.15rem; font-weight: 600; overflow-wrap: anywhere; }}
+    .muted {{ color: var(--muted); font-size: .8rem; line-height: 1.8; }}
     .sr-only {{ position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }}
-    .skip-link {{ position: fixed; top: -80px; left: 16px; z-index: 10; padding: 12px; background: var(--surface); }}
+    .skip-link {{ position: fixed; top: -80px; left: 16px; z-index: 30; padding: 12px; background: var(--surface); }}
     .skip-link:focus {{ top: 12px; }}
-    .shell {{ width: min(1440px, calc(100% - 96px)); margin-inline: auto; }}
-    .masthead {{ display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 25px; border-bottom: 1px solid var(--line); }}
-    .brand {{ display: flex; align-items: center; gap: 12px; font-size: .9rem; letter-spacing: .07em; }}
-    .brand-mark {{ width: 22px; height: 26px; border: 1px solid var(--muted); padding: 4px; display: inline-flex; }}
-    .brand-mark::after {{ content: ''; width: 100%; border: 1px solid var(--muted); }}
-    .masthead-note {{ color: var(--muted); font-size: .72rem; letter-spacing: .1em; }}
-    .hero {{ padding: 44px 0 26px; animation: hero-in .65s ease-out both; }}
-    .eyebrow {{ color: var(--muted); font-size: .7rem; letter-spacing: .2em; margin-bottom: 13px; }}
-    h1 {{ font-family: 'Zen Old Mincho', serif; font-weight: 400; font-size: clamp(2rem, 3.5vw, 3.25rem); letter-spacing: .09em; line-height: 1.45; }}
-    .hero p:last-child {{ color: var(--muted); font-size: .82rem; margin-top: 14px; line-height: 1.9; }}
-    .search-dock {{ position: relative; }}
-    .search-dock::before {{ content: ''; position: absolute; inset: -180px 0 -40px; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 45% 60%, #e2a15a0c, transparent 68%); }}
-    .search-form {{ display: flex; align-items: center; gap: 16px; padding: 9px 10px 9px 22px; background: var(--surface); border: 1px solid #71604c; border-radius: 6px; }}
+    .shell {{ width: min(1600px, calc(100% - 64px)); margin-inline: auto; }}
+    .header {{ position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }}
+    .masthead {{ display: flex; align-items: center; justify-content: space-between; gap: 40px; min-height: 86px; padding-block: 16px; }}
+    .brand {{ display: inline-flex; align-items: center; gap: 12px; flex-shrink: 0; font: 600 1.45rem 'Fraunces', 'IBM Plex Sans JP', serif; letter-spacing: -.045em; }}
+    .brand-mark {{ display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }}
+    .brand-mark svg {{ width: 23px; height: 23px; }}
+    .search-form {{ display: flex; flex: 0 1 740px; align-items: center; gap: 10px; padding: 5px 6px 5px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }}
     .search-form:focus-within {{ border-color: var(--accent); }}
-    .search-icon {{ width: 20px; height: 20px; flex-shrink: 0; color: var(--accent); }}
-    #q {{ flex: 1; width: 100%; padding: 12px 0; border: 0; background: transparent; font-size: 1rem; }}
-    #mediaType {{ border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; padding-inline: 18px; }}
-    #go {{ background: var(--accent); color: var(--bg); border-color: var(--accent); min-width: 106px; min-height: 48px; font-weight: 600; }}
-    #go:hover {{ background: #edb87e; }}
-    .status-line {{ min-height: 53px; display: flex; align-items: center; gap: 10px; padding: 12px 0; }}
-    #status {{ font-size: .76rem; color: var(--muted); overflow-wrap: anywhere; }}
-    #status::before {{ content: ''; display: inline-block; width: 5px; height: 5px; margin: 0 10px 2px 0; border-radius: 50%; background: currentColor; }}
-    #status.busy::before {{ animation: status-pulse 1.4s ease-in-out infinite; }}
-    #status.ok {{ color: var(--text); }}
+    .search-icon {{ width: 19px; height: 19px; flex-shrink: 0; color: var(--muted); }}
+    #q {{ flex: 1; width: 100%; border: 0; padding: 7px 0; background: transparent; }}
+    #mediaType {{ max-width: 115px; min-height: 36px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; padding-inline: 10px; font-size: .8rem; }}
+    #go {{ min-width: 72px; }}
+    .page-heading {{ padding-block: 30px 23px; }}
+    .page-heading p {{ margin-top: 7px; }}
+    .view-bar {{ display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--line); }}
+    .view-switch {{ display: flex; gap: 28px; }}
+    .view-switch button {{ position: relative; border: 0; border-radius: 0; padding: 13px 2px 16px; font-weight: 500; color: var(--muted); background: transparent; }}
+    .view-switch button[aria-selected="true"] {{ color: var(--accent); }}
+    .view-switch button[aria-selected="true"]::after {{ content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background: var(--accent); border-radius: 2px 2px 0 0; }}
+    .status-line {{ display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: .75rem; color: var(--muted); }}
+    .status-line > span {{ white-space: nowrap; }}
+    #status {{ overflow-wrap: anywhere; }}
+    #status.ok {{ color: var(--accent); }}
     #status.err {{ color: var(--danger); }}
-    .layout {{ display: grid; grid-template-columns: 228px minmax(0, 1fr); gap: 32px; border-top: 1px solid var(--line); min-height: 480px; }}
-    .sidebar {{ padding: 27px 25px 32px 0; border-right: 1px solid var(--line); min-width: 0; }}
-    .section-label {{ font-size: .72rem; font-weight: 500; color: var(--muted); letter-spacing: .12em; margin-bottom: 15px; }}
-    .folder {{ display: flex; width: 100%; align-items: center; text-align: left; gap: 10px; border: 0; padding: 10px; margin-bottom: 3px; overflow-wrap: anywhere; }}
-    .folder::before {{ content: ''; width: 14px; height: 11px; border: 1px solid var(--muted); border-radius: 2px; flex-shrink: 0; }}
-    .folder.active {{ background: var(--surface); }}
-    #folders {{ margin-top: 8px; }}
-    #folders > p {{ padding: 8px 10px; }}
-    .folder-create {{ display: flex; gap: 6px; margin-top: 19px; }}
+    #status.busy {{ color: var(--warn); }}
+    .import-banner {{ display: flex; align-items: center; gap: 14px; padding: 16px 20px; margin-top: 20px; border: 1px solid #e8d8b2; border-radius: 8px; color: var(--warn); background: #fff8e8; }}
+    .import-banner.ok {{ color: var(--accent); background: var(--accent-soft); border-color: #badbd3; }}
+    .import-banner.err {{ color: var(--danger); background: #fff0ee; border-color: #f0c8c3; }}
+    .import-dot {{ width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }}
+    .import-banner.busy .import-dot {{ animation: status-pulse 1.4s ease-in-out infinite; }}
+    .import-copy {{ flex: 1; min-width: 0; }}
+    .import-copy strong {{ display: block; font-size: .85rem; font-weight: 500; }}
+    #importStatus {{ margin-top: 3px; font-size: .8rem; overflow-wrap: anywhere; }}
+    #dismissImport {{ color: inherit; background: transparent; border-color: currentColor; }}
+    .view-panel {{ animation: view-in .16s ease-out; }}
+    .library-layout {{ display: grid; grid-template-columns: 228px minmax(0, 1fr); min-height: 520px; }}
+    .sidebar {{ padding: 28px 20px 32px 0; border-right: 1px solid var(--line); min-width: 0; }}
+    .section-label {{ font-size: .8rem; font-weight: 600; margin-bottom: 16px; }}
+    .folder {{ display: flex; width: 100%; align-items: center; text-align: left; gap: 10px; border: 0; padding: 10px 12px; margin-bottom: 4px; background: transparent; overflow-wrap: anywhere; }}
+    .folder::before {{ content: ''; width: 15px; height: 12px; border: 1.5px solid currentColor; border-radius: 2px; flex-shrink: 0; }}
+    .folder.active {{ color: var(--accent); background: var(--accent-soft); font-weight: 500; }}
+    #folders {{ margin-top: 5px; }}
+    #folders > p {{ padding: 10px 12px; }}
+    .folder-create {{ display: grid; gap: 8px; padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--line); }}
+    .folder-create label {{ font-size: .75rem; color: var(--muted); }}
     .folder-create input {{ width: 100%; }}
-    .folder-create button {{ flex-shrink: 0; }}
-    .products-section {{ margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--line); }}
-    summary {{ font-size: .8rem; cursor: pointer; padding: 5px 0; }}
-    .products-section > p {{ margin: 12px 0; }}
-    .product-form {{ display: grid; gap: 8px; margin: 16px 0; }}
-    .product-row {{ border-top: 1px solid var(--line); padding: 14px 0; overflow-wrap: anywhere; }}
-    .product-row code {{ display: block; color: var(--muted); margin-bottom: 4px; }}
-    .product-row .actions {{ margin-top: 9px; }}
-    .workspace {{ min-width: 0; padding: 14px 0 40px; }}
-    .view-switch {{ display: flex; gap: 24px; border-bottom: 1px solid var(--line); }}
-    .view-switch button {{ border: 0; border-radius: 0; padding: 13px 0 17px; color: var(--muted); }}
-    .view-switch button[aria-pressed="true"] {{ color: var(--text); border-bottom: 2px solid var(--text); }}
-    .view-switch button:hover {{ background: transparent; color: var(--text); }}
-    .collection-heading {{ display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 24px 0 18px; }}
+    .folder-create button {{ text-align: left; color: var(--accent); }}
+    .workspace {{ min-width: 0; padding: 28px 0 40px 28px; }}
+    .collection-heading {{ display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }}
+    .collection-heading > div {{ min-width: 0; }}
     #crumb {{ font-size: .95rem; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }}
-    #count {{ white-space: nowrap; }}
-    .upload-toolbar {{ display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 13px; margin-bottom: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }}
+    .count {{ white-space: nowrap; font-variant-numeric: tabular-nums; }}
+    .upload-toolbar {{ display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }}
+    #upload {{ display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; }}
+    #upload svg {{ width: 18px; height: 18px; }}
     .file-picker {{ position: relative; flex-shrink: 0; }}
     .file-picker input {{ position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }}
-    .file-picker label {{ display: block; border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; font-size: .78rem; }}
+    .file-picker label {{ display: block; border: 1px solid var(--line); border-radius: 6px; padding: 11px 12px; font-size: .8rem; }}
     .file-picker:hover label {{ border-color: var(--muted); }}
-    .file-picker:focus-within {{ outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }}
-    #fileName {{ flex: 1 1 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-    #uploadProduct {{ max-width: 190px; }}
-    #upload {{ background: #34383b; }}
-    .asset-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 18px; }}
-    .asset-card {{ min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }}
-    #out .asset-card {{ animation: result-in .35s ease-out both; animation-delay: calc(var(--order, 0) * 45ms); }}
-    .thumbnail {{ display: block; aspect-ratio: 4 / 3; background: #191b1e; border-bottom: 1px solid var(--line); overflow: hidden; }}
+    .file-picker:focus-within {{ outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }}
+    #fileName {{ flex: 1 1 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    #uploadProduct {{ max-width: 215px; }}
+    .upload-hint {{ margin: 9px 0 24px; font-size: .75rem; }}
+    .asset-grid {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }}
+    .asset-card {{ position: relative; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 2px rgb(0 0 0 / 6%); }}
+    .asset-card:focus-within {{ border-color: var(--accent); }}
+    .thumbnail {{ display: block; aspect-ratio: 1 / 1; background: #edf0f2; border-bottom: 1px solid var(--line); border-radius: 7px 7px 0 0; overflow: hidden; }}
     .thumbnail img {{ display: block; width: 100%; height: 100%; object-fit: contain; color: var(--muted); font-size: .8rem; }}
-    .thumbnail:focus-visible {{ outline-offset: -4px; }}
-    .asset-info {{ padding: 13px 13px 8px; }}
-    .asset-name {{ font-size: .87rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-    .asset-caption {{ margin-top: 6px; font-size: .7rem; color: var(--muted); overflow-wrap: anywhere; line-height: 1.8; }}
-    .asset-id {{ display: block; margin-top: 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-    .actions {{ display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }}
-    .actions button, .actions select {{ font-size: .7rem; min-height: 34px; padding: .35rem .45rem; }}
-    .asset-actions {{ padding: 4px 12px 12px; }}
-    .asset-actions select {{ flex: 1; width: 70px; }}
-    .danger {{ color: var(--danger); }}
-    .empty-state {{ grid-column: 1 / -1; display: grid; justify-items: center; align-content: center; min-height: 280px; padding: 35px 20px; border: 1px dashed var(--line); border-radius: 4px; text-align: center; }}
-    .empty-mark {{ width: 48px; height: 40px; border: 1px solid #5a5c5d; box-shadow: 6px -6px 0 -1px var(--bg), 6px -6px 0 0 var(--line); margin-bottom: 25px; }}
-    .empty-state h3 {{ margin: 0 0 10px; font-family: 'Zen Old Mincho', serif; font-size: 1.2rem; font-weight: 400; }}
-    .empty-state p {{ color: var(--muted); font-size: .78rem; line-height: 1.9; max-width: 360px; }}
-    footer {{ border-top: 1px solid var(--line); padding-block: 22px 30px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .7rem; }}
+    .asset-info {{ padding: 14px; }}
+    .asset-name {{ font-size: .85rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .asset-caption {{ display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 8px; font-size: .7rem; color: var(--muted); line-height: 1.7; overflow-wrap: anywhere; }}
+    .type-badge {{ padding: 1px 6px; border-radius: 4px; background: var(--bg); }}
+    .card-menu {{ position: absolute; right: 9px; top: 9px; }}
+    .card-menu[open] {{ z-index: 5; }}
+    .card-menu summary {{ display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; list-style: none; font-size: 1.4rem; line-height: 1; }}
+    .card-menu summary::-webkit-details-marker {{ display: none; }}
+    .card-menu summary:hover {{ border-color: var(--accent); color: var(--accent); }}
+    .menu-content {{ position: absolute; right: 0; top: 40px; width: 190px; display: grid; gap: 5px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }}
+    .menu-content button {{ text-align: left; border: 0; }}
+    .menu-content label {{ color: var(--muted); font-size: .75rem; padding: 7px 8px 0; }}
+    .menu-content select {{ width: 100%; font-size: .8rem; }}
+    .menu-content .danger {{ color: var(--danger); border-top: 1px solid var(--line); border-radius: 0; margin-top: 3px; }}
+    .empty-state {{ grid-column: 1 / -1; display: grid; justify-items: center; align-content: center; min-height: 300px; padding: 36px 24px; border: 1px dashed #c9d0d8; border-radius: 8px; text-align: center; }}
+    .empty-mark {{ display: grid; place-items: center; width: 56px; height: 56px; border-radius: 12px; color: var(--accent); background: var(--accent-soft); margin-bottom: 20px; }}
+    .empty-mark svg {{ width: 28px; height: 28px; }}
+    .empty-state h3 {{ margin: 0 0 10px; font-size: 1.05rem; font-weight: 500; }}
+    .empty-state p {{ color: var(--muted); font-size: .8rem; line-height: 1.9; max-width: 440px; }}
+    .empty-state button {{ margin-top: 20px; }}
+    .standalone-panel {{ padding-block: 28px 40px; min-height: 520px; }}
+    .standalone-panel .collection-heading p {{ margin-top: 7px; }}
+    .product-form {{ display: flex; align-items: end; flex-wrap: wrap; gap: 16px; padding: 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); margin-bottom: 24px; }}
+    .product-field {{ display: grid; gap: 8px; flex: 1 1 220px; }}
+    .product-field label {{ font-size: .8rem; font-weight: 500; }}
+    .product-field input {{ width: 100%; }}
+    #addProduct {{ min-height: 43px; }}
+    .product-list {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }}
+    .product-row {{ position: relative; min-width: 0; padding: 22px 54px 22px 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / 6%); overflow-wrap: anywhere; }}
+    .product-row .product-name {{ display: block; font-size: .95rem; font-weight: 500; }}
+    .product-row .product-code {{ display: block; color: var(--muted); font-size: .75rem; margin-top: 8px; }}
+    footer {{ border-top: 1px solid var(--line); padding-block: 22px 28px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .7rem; }}
     footer .debug {{ text-align: right; max-width: 100%; overflow-wrap: anywhere; }}
+    footer .mono {{ font-family: ui-monospace, monospace; }}
     footer p {{ margin-top: 4px; }}
-    @media (hover: hover) and (pointer: fine) {{
-      .asset-actions {{ opacity: 0; }}
-      .asset-card:hover .asset-actions, .asset-card:focus-within .asset-actions {{ opacity: 1; }}
-    }}
-    @media (min-width: 1500px) {{ .asset-grid {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }} }}
-    @media (max-width: 1100px) {{
-      .shell {{ width: calc(100% - 56px); }}
-      .layout {{ grid-template-columns: 200px minmax(0, 1fr); gap: 24px; }}
-      .sidebar {{ padding-right: 20px; }}
-      .asset-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    @media (max-width: 1250px) {{ .asset-grid {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} }}
+    @media (max-width: 1000px) {{
+      .shell {{ width: calc(100% - 40px); }}
+      .masthead {{ gap: 24px; }}
+      .library-layout {{ grid-template-columns: 190px minmax(0, 1fr); }}
+      .sidebar {{ padding-right: 16px; }}
+      .workspace {{ padding-left: 20px; }}
+      .asset-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }}
+      .product-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
     }}
     @media (max-width: 720px) {{
       .shell {{ width: calc(100% - 32px); }}
-      .masthead {{ padding-block: 20px; }}
-      .masthead-note {{ font-size: .62rem; }}
-      .hero {{ padding: 30px 0 22px; }}
-      .hero p:last-child {{ font-size: .76rem; }}
-      .search-dock {{ position: sticky; top: 0; z-index: 3; padding-block: 8px; background: var(--bg); }}
-      .search-dock::before {{ display: none; }}
-      .search-form {{ gap: 7px; padding: 7px; }}
+      .masthead {{ flex-wrap: wrap; gap: 12px; padding-block: 12px; }}
+      .brand {{ font-size: 1.25rem; }}
+      .brand-mark {{ width: 29px; height: 29px; }}
+      .search-form {{ flex-basis: 100%; gap: 6px; padding-left: 10px; }}
       .search-icon {{ display: none; }}
-      #q {{ font-size: 16px; padding-left: 4px; }}
-      #mediaType {{ padding-inline: 6px; width: 73px; font-size: .75rem; }}
-      #go {{ min-width: 58px; padding-inline: 10px; min-height: 44px; }}
-      .layout {{ grid-template-columns: 1fr; gap: 0; }}
+      #q, input, select {{ font-size: 16px; }}
+      #mediaType {{ width: 78px; padding-inline: 5px; font-size: .75rem; }}
+      #go {{ min-width: 54px; padding-inline: 10px; }}
+      .page-heading {{ padding-block: 24px 16px; }}
+      h1 {{ font-size: 1.25rem; }}
+      .view-bar {{ flex-wrap: wrap; gap: 0; }}
+      .view-switch {{ width: 100%; gap: 26px; }}
+      .status-line {{ padding-block: 12px; }}
+      .library-layout {{ grid-template-columns: 1fr; }}
       .sidebar {{ padding: 20px 0; border-right: 0; border-bottom: 1px solid var(--line); }}
-      #folders {{ display: flex; flex-wrap: wrap; gap: 5px; }}
-      #folders .folder {{ width: auto; max-width: 100%; border: 1px solid var(--line); }}
-      #rootBtn {{ width: auto; }}
-      .folder-create {{ max-width: 360px; margin-top: 12px; }}
-      .products-section {{ margin-top: 18px; padding-top: 14px; }}
+      .section-label {{ margin-bottom: 10px; }}
+      .folder-nav, #folders {{ display: flex; flex-wrap: wrap; gap: 5px; }}
+      #folders {{ margin: 0; }}
+      .folder {{ width: auto; max-width: 100%; margin: 0; }}
+      #folders > p {{ padding: 8px; }}
+      .folder-create {{ grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 14px; padding-top: 14px; }}
+      .folder-create label {{ grid-column: 1 / -1; }}
+      .workspace {{ padding: 22px 0 32px; }}
+      .upload-toolbar {{ padding: 12px; gap: 10px; }}
+      #upload {{ flex: 1; }}
+      #uploadProduct {{ max-width: none; width: 50%; flex: 1; font-size: .8rem; }}
+      #fileName {{ flex-basis: 140px; }}
       .asset-grid {{ gap: 12px; }}
-      .asset-info {{ padding: 10px; }}
-      .asset-actions {{ padding: 0 8px 10px; }}
-      .asset-actions select {{ flex-basis: 100%; order: 3; }}
-      .actions button, .actions select {{ min-height: 40px; }}
-      #uploadProduct {{ flex: 1; max-width: none; width: 50%; }}
+      .asset-info {{ padding: 11px; }}
+      .asset-name {{ font-size: .8rem; }}
+      .card-menu {{ right: 6px; top: 6px; }}
+      .card-menu summary {{ width: 40px; height: 40px; }}
+      .menu-content {{ top: 44px; width: min(190px, 42vw); }}
+      .menu-content button, .menu-content select {{ min-height: 44px; }}
+      .product-form {{ padding: 16px; }}
+      .product-list {{ grid-template-columns: 1fr; }}
+      .import-banner {{ padding: 14px; flex-wrap: wrap; }}
       footer .debug {{ text-align: left; }}
     }}
-    @keyframes hero-in {{ from {{ opacity: 0; transform: translateY(8px); }} to {{ opacity: 1; transform: none; }} }}
-    @keyframes result-in {{ from {{ opacity: 0; transform: translateY(6px); }} to {{ opacity: 1; transform: none; }} }}
+    @keyframes view-in {{ from {{ opacity: .5; }} to {{ opacity: 1; }} }}
     @keyframes status-pulse {{ 50% {{ opacity: .25; }} }}
     @media (prefers-reduced-motion: reduce) {{ *, *::before {{ animation: none !important; }} }}
   </style>
 </head>
 <body>
-  <a class="skip-link" href="#workspace">ライブラリへ移動</a>
-  <header class="masthead shell">
-    <a class="brand" href="/" aria-label="media-search ホーム"><span class="brand-mark" aria-hidden="true"></span>media-search</a>
-    <span class="masthead-note">写真と映像の保管室</span>
-  </header>
-  <section class="hero shell" aria-labelledby="hero-title">
-    <p class="eyebrow">記憶をたどる、素材に出会う。</p>
-    <h1 id="hero-title">暗室アーカイブ</h1>
-    <p>色、情景、思い浮かぶ言葉から。探していた一枚を、ここで。</p>
-  </section>
-  <div class="search-dock shell">
-    <form id="searchForm" class="search-form" role="search">
-      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
-      <label class="sr-only" for="q">意味・名前で探す</label>
-      <input id="q" type="search" placeholder="意味・名前で探す…" required autocomplete="off" />
-      <label class="sr-only" for="mediaType">素材の種類</label>
-      <select id="mediaType"><option value="">すべて</option><option value="image">画像</option><option value="video">動画</option></select>
-      <button id="go" type="submit">検索</button>
-    </form>
-  </div>
-  <div class="status-line shell"><p id="status" role="status" aria-live="polite" aria-atomic="true">素材を読み込んでいます…</p></div>
-  <div class="layout shell">
-    <aside class="sidebar" aria-label="ライブラリの管理">
-      <h2 class="section-label">フォルダ</h2>
-      <nav aria-label="フォルダを選択">
-        <button id="rootBtn" class="folder active" aria-current="page">ホーム</button>
-        <button id="parentBtn" class="folder" hidden>ひとつ上のフォルダ</button>
-        <div id="folders"></div>
-      </nav>
-      <form id="folderForm" class="folder-create">
-        <label class="sr-only" for="newFolder">新しいフォルダ名</label>
-        <input id="newFolder" placeholder="新しいフォルダ" required />
-        <button id="addFolder" type="submit" aria-label="フォルダを作成">＋ 作成</button>
+  <a class="skip-link" href="#workspace">メイン画面へ移動</a>
+  <header class="header">
+    <div class="masthead shell">
+      <a class="brand" href="/" aria-label="media-search ホーム"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m3 18 5-5 4 4 4-6 5 7"/></svg></span>media-search</a>
+      <form id="searchForm" class="search-form" role="search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
+        <label class="sr-only" for="q">キーワード・意味で検索</label>
+        <input id="q" type="search" placeholder="キーワード・意味で検索…" required autocomplete="off" />
+        <label class="sr-only" for="mediaType">素材の種類</label>
+        <select id="mediaType"><option value="">すべて</option><option value="image">画像</option><option value="video">動画</option></select>
+        <button id="go" class="primary" type="submit">検索</button>
       </form>
-      <details class="products-section">
-        <summary>商品管理</summary>
-        <p class="muted">素材に紐づける商品を登録・編集します。</p>
-        <form id="productForm" class="product-form">
-          <label class="sr-only" for="newProductId">商品コード（SKU）</label>
-          <input id="newProductId" placeholder="商品コード（SKU）" required />
-          <label class="sr-only" for="newProductName">商品名</label>
-          <input id="newProductName" placeholder="商品名" required />
-          <button id="addProduct" type="submit">商品を登録</button>
-        </form>
-        <div id="products"></div>
-      </details>
-    </aside>
-    <main id="workspace" class="workspace" tabindex="-1">
-      <nav class="view-switch" aria-label="表示の切り替え">
-        <button id="libraryTab" aria-pressed="true" aria-controls="assets">ライブラリ</button>
-        <button id="searchTab" aria-pressed="false" aria-controls="out">検索結果</button>
+    </div>
+  </header>
+  <main id="workspace" class="shell" tabindex="-1">
+    <div class="page-heading"><h1>メディアライブラリ</h1><p class="muted">画像・動画をまとめて管理。フォルダで整理し、言葉で検索。</p></div>
+    <div class="view-bar">
+      <nav class="view-switch" role="tablist" aria-label="表示の切り替え">
+        <button id="libraryTab" role="tab" aria-selected="true" aria-controls="libraryPanel">ライブラリ</button>
+        <button id="searchTab" role="tab" aria-selected="false" aria-controls="searchPanel" tabindex="-1">検索結果</button>
+        <button id="productsTab" role="tab" aria-selected="false" aria-controls="productsPanel" tabindex="-1">商品</button>
       </nav>
-      <div class="collection-heading"><h2 id="crumb">ホーム</h2><span id="count" class="muted"></span></div>
-      <div id="uploadToolbar" class="upload-toolbar" role="group" aria-label="現在のフォルダに素材を追加">
-        <div class="file-picker"><label for="file">＋ 素材を選ぶ</label><input id="file" type="file" accept=".jpg,.jpeg,.png,.mp4" multiple aria-describedby="fileName" /></div>
-        <span id="fileName" class="muted">JPG・PNG・MP4</span>
-        <label class="sr-only" for="uploadProduct">紐づける商品（任意）</label>
-        <select id="uploadProduct"><option value="">商品を紐づける（任意）</option></select>
-        <button id="upload">アップロード</button>
+      <div class="status-line"><span>状態:</span><p id="status" role="status" aria-live="polite" aria-atomic="true">読み込み中…</p></div>
+    </div>
+    <section id="importBanner" class="import-banner" role="status" aria-live="polite" aria-atomic="true" aria-label="取り込み状況" hidden>
+      <span class="import-dot" aria-hidden="true"></span><div class="import-copy"><strong>ファイルの取り込み</strong><p id="importStatus"></p></div>
+      <button id="dismissImport" type="button" hidden>閉じる</button>
+    </section>
+    <section id="libraryPanel" class="view-panel library-layout" role="tabpanel" aria-labelledby="libraryTab">
+      <aside class="sidebar" aria-label="フォルダの管理">
+        <h2 class="section-label">フォルダ</h2>
+        <nav class="folder-nav" aria-label="フォルダを選択">
+          <button id="rootBtn" class="folder active" aria-current="page">ライブラリ直下</button>
+          <button id="parentBtn" class="folder" hidden>ひとつ上へ</button>
+          <div id="folders"></div>
+        </nav>
+        <form id="folderForm" class="folder-create">
+          <label for="newFolder">現在の場所にフォルダを作成</label>
+          <input id="newFolder" placeholder="新しいフォルダ名" required />
+          <button id="addFolder" type="submit">＋ 新規フォルダ</button>
+        </form>
+      </aside>
+      <div class="workspace">
+        <div class="collection-heading"><h2 id="crumb">ライブラリ / 直下</h2><span id="count" class="muted count"></span></div>
+        <div id="uploadToolbar" class="upload-toolbar" role="group" aria-label="現在のフォルダに素材を追加">
+          <button id="upload" class="primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/></svg>アップロード</button>
+          <label class="sr-only" for="uploadProduct">紐づける商品（任意）</label>
+          <select id="uploadProduct"><option value="">商品を選ぶ（任意）</option></select>
+          <div class="file-picker"><label for="file">ファイルを選択</label><input id="file" type="file" accept=".jpg,.jpeg,.png,.mp4" multiple aria-describedby="fileName uploadHint" /></div>
+          <span id="fileName" class="muted">未選択</span>
+        </div>
+        <p id="uploadHint" class="muted upload-hint">JPG・PNG・MP4 ／ 複数選択できます。商品を紐づけて、現在のフォルダにアップロード。</p>
+        <div id="assets" class="asset-grid" aria-label="ライブラリの素材" aria-busy="true"></div>
       </div>
-      <div id="assets" class="asset-grid" aria-label="ライブラリの素材"></div>
-      <div id="out" class="asset-grid" aria-label="検索結果" hidden></div>
-    </main>
-  </div>
+    </section>
+    <section id="searchPanel" class="view-panel standalone-panel" role="tabpanel" aria-labelledby="searchTab" hidden>
+      <div class="collection-heading"><div><h2 id="searchHeading">検索結果</h2><p class="muted">ライブラリ全体から、入力した言葉に近い素材を表示します。</p></div><span id="searchCount" class="muted count"></span></div>
+      <div id="out" class="asset-grid" aria-label="検索結果"></div>
+    </section>
+    <section id="productsPanel" class="view-panel standalone-panel" role="tabpanel" aria-labelledby="productsTab" hidden>
+      <div class="collection-heading"><div><h2>商品</h2><p class="muted">素材に紐づける商品を管理します。登録した商品はアップロード時に選べます。</p></div><span id="productCount" class="muted count"></span></div>
+      <form id="productForm" class="product-form">
+        <div class="product-field"><label for="newProductId">商品コード（SKU）</label><input id="newProductId" placeholder="例：BAG-001" required /></div>
+        <div class="product-field"><label for="newProductName">商品名</label><input id="newProductName" placeholder="例：キャンバストート" required /></div>
+        <button id="addProduct" class="primary" type="submit">＋ 商品を登録</button>
+      </form>
+      <div id="products" class="product-list" aria-label="登録済みの商品"></div>
+    </section>
+  </main>
   <footer class="shell">
-    <span>暗室アーカイブ <span aria-hidden="true">／</span> media-search</span>
+    <span>media-search <span aria-hidden="true">／</span> メディアライブラリ</span>
     <div class="debug"><span class="mono">mode={escape(embedder_mode)} · {escape(embedder_id)}</span>{warn}</div>
   </footer>
   <script>
@@ -290,6 +326,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     const fileInput = document.getElementById('file');
     const rootBtn = document.getElementById('rootBtn');
     const parentBtn = document.getElementById('parentBtn');
+    const views = ['library', 'search', 'products'];
 
     // API names and IDs are data, including when used in HTML attributes.
     function esc(value) {{
@@ -298,6 +335,14 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     function setStatus(msg, kind = '') {{
       statusEl.textContent = msg;
       statusEl.className = kind;
+    }}
+    function setImportStatus(msg, kind) {{
+      const banner = document.getElementById('importBanner');
+      banner.hidden = false;
+      banner.className = 'import-banner ' + kind;
+      document.getElementById('importStatus').textContent = msg;
+      document.getElementById('dismissImport').hidden = kind === 'busy';
+      setStatus(kind === 'busy' ? '取り込み中' : (kind === 'err' ? '取り込みに失敗' : '取り込み完了'), kind);
     }}
     async function requestJson(url, options) {{
       const res = await fetch(url, options);
@@ -317,8 +362,8 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         setStatus(error instanceof TypeError ? '通信できませんでした。接続を確認して、もう一度お試しください。' : error.message, 'err');
       }}
     }}
-    function emptyState(title, message) {{
-      return `<div class="empty-state"><span class="empty-mark" aria-hidden="true"></span><h3>${{esc(title)}}</h3><p>${{esc(message)}}</p></div>`;
+    function emptyState(title, message, action = '', label = '') {{
+      return `<div class="empty-state"><span class="empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m3 18 5-5 4 4 4-6 5 7"/></svg></span><h3>${{esc(title)}}</h3><p>${{esc(message)}}</p>${{action ? `<button class="primary" data-empty-action="${{esc(action)}}">${{esc(label)}}</button>` : ''}}</div>`;
     }}
     function folderPath() {{
       const names = [];
@@ -331,29 +376,33 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         names.unshift(folder.name);
         id = folder.parent_id;
       }}
-      return ['ホーム', ...names].join(' / ');
+      return ['ライブラリ', ...(names.length ? names : ['直下'])].join(' / ');
     }}
     function setView(view) {{
       activeView = view;
-      const library = view === 'library';
-      assetsEl.hidden = !library;
-      out.hidden = library;
-      document.getElementById('uploadToolbar').hidden = !library;
-      document.getElementById('libraryTab').setAttribute('aria-pressed', String(library));
-      document.getElementById('searchTab').setAttribute('aria-pressed', String(!library));
-      crumb.textContent = library ? folderPath() : (lastQuery ? `「${{lastQuery}}」の検索結果` : '検索結果');
-      document.getElementById('count').textContent = library ? `${{assetCount}} 点` : (resultCount === null ? '' : `${{resultCount}} 件 · 関連度順`);
+      views.forEach(name => {{
+        const selected = name === view;
+        document.getElementById(name + 'Panel').hidden = !selected;
+        const tab = document.getElementById(name + 'Tab');
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      }});
+      crumb.textContent = folderPath();
+      document.getElementById('count').textContent = `${{assetCount}} 点`;
+      document.getElementById('searchHeading').textContent = lastQuery ? `「${{lastQuery}}」の検索結果` : '検索結果';
+      document.getElementById('searchCount').textContent = resultCount === null ? '' : `${{resultCount}} 件 · 関連度順`;
+      document.getElementById('productCount').textContent = `${{productCache.length}} 件`;
     }}
     function updateFileLabel() {{
       const files = Array.from(fileInput.files || []);
-      document.getElementById('fileName').textContent = files.length === 1 ? files[0].name : (files.length ? `${{files.length}} 件を選択中` : 'JPG・PNG・MP4');
+      document.getElementById('fileName').textContent = files.length === 1 ? files[0].name : (files.length ? `${{files.length}} 件を選択中` : '未選択');
     }}
     async function pollJob(id) {{
       for (;;) {{
         const body = await requestJson('/api/import/jobs/' + encodeURIComponent(id));
         const progress = body.processed != null && body.total != null ? ` ${{body.processed}}/${{body.total}}` : '';
         const label = {{queued: '開始を待っています', running: '検索用データを作成中', succeeded: '完了しました', failed: '失敗しました'}}[body.status] || '処理中';
-        setStatus(`取り込み：${{label}}${{progress}}` + (body.error ? ' — ' + body.error : ''),
+        setImportStatus(`取り込み：${{label}}${{progress}}` + (body.error ? ' — ' + body.error : ''),
           body.status === 'failed' ? 'err' : (body.status === 'succeeded' ? 'ok' : 'busy'));
         if (body.status === 'succeeded' || body.status === 'failed') {{
           await refreshAssets();
@@ -367,7 +416,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       folderCache = body.folders || [];
     }}
     function folderOptionsHtml(selected) {{
-      return '<option value="">ホーム</option>' + folderCache.map(f =>
+      return '<option value="">ライブラリ直下</option>' + folderCache.map(f =>
         `<option value="${{esc(f.folder_id)}}" ${{f.folder_id === selected ? 'selected' : ''}}>${{esc(f.name)}}</option>`
       ).join('');
     }}
@@ -383,27 +432,27 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       parentBtn.hidden = !folder;
       foldersEl.innerHTML = (body.folders || []).map(f =>
         `<button class="folder" data-id="${{esc(f.folder_id)}}">${{esc(f.name)}}</button>`
-      ).join('') || '<p class="muted">子フォルダはありません</p>';
+      ).join('') || '<p class="muted">フォルダを作成して素材を整理できます。</p>';
       foldersEl.querySelectorAll('.folder').forEach(el => {{
         el.onclick = () => runAction(async () => {{ currentFolder = el.dataset.id; await refreshAll(); }});
       }});
     }}
-    function assetCard(asset, index, search = false) {{
+    function assetCard(asset, search = false) {{
       const name = asset.display_name || asset.asset_id;
-      const url = '/api/assets/' + encodeURI(asset.asset_id);
-      const caption = (asset.media_type === 'video' ? '動画' : '画像') + (asset.product_id ? ' · SKU ' + asset.product_id : '');
-      return `<article class="asset-card" style="--order:${{Math.min(index, 8)}}">
+      const url = '/api/assets/' + encodeURIComponent(asset.asset_id);
+      const product = productCache.find(p => p.product_id === asset.product_id);
+      const productLabel = product ? product.name : asset.product_id;
+      return `<article class="asset-card">
         <a class="thumbnail" href="${{esc(url)}}" tabindex="-1" aria-hidden="true"><img src="${{esc(asset.thumbnail_url)}}" alt="" loading="lazy" /></a>
         <div class="asset-info">
           <div class="asset-name"><a href="${{esc(url)}}" title="${{esc(name)}}">${{esc(name)}}</a></div>
-          <p class="asset-caption">${{esc(caption)}}${{search ? ' · 関連度 ' + Number(asset.score).toFixed(4) : ''}}</p>
-          <code class="asset-id" title="${{esc(asset.asset_id)}}">${{esc(asset.asset_id)}}</code>
+          <p class="asset-caption"><span class="type-badge">${{asset.media_type === 'video' ? '動画' : '画像'}}</span>${{asset.product_id ? `<span data-product-caption="${{esc(asset.product_id)}}">${{esc(productLabel)}}</span>` : ''}}${{search ? '<span>関連度 ' + Number(asset.score).toFixed(4) + '</span>' : ''}}</p>
         </div>
-        ${{search ? '' : `<div class="actions asset-actions">
+        ${{search ? '' : `<details class="card-menu"><summary aria-label="${{esc(name)}}の操作">⋯</summary><div class="menu-content">
           <button data-ren="${{esc(asset.asset_id)}}" aria-label="${{esc(name)}}の名前を変更">名前変更</button>
-          <select data-mov="${{esc(asset.asset_id)}}" aria-label="${{esc(name)}}の移動先" title="移動先のフォルダ">${{folderOptionsHtml(asset.folder_id || '')}}</select>
+          <label>フォルダへ移動<select data-mov="${{esc(asset.asset_id)}}" aria-label="${{esc(name)}}の移動先">${{folderOptionsHtml(asset.folder_id || '')}}</select></label>
           <button class="danger" data-del="${{esc(asset.asset_id)}}" aria-label="${{esc(name)}}を削除">削除</button>
-        </div>`}}
+        </div></details>`}}
       </article>`;
     }}
     async function refreshAssets() {{
@@ -413,8 +462,9 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       if (request !== assetRequest) return;
       const assets = body.assets || [];
       assetCount = assets.length;
-      assetsEl.innerHTML = assets.map((a, i) => assetCard(a, i)).join('') ||
-        emptyState('まだ、素材のない保管室。', '「素材を選ぶ」から写真や動画を追加してください。取り込みが完了すると、言葉で探せるようになります。');
+      assetsEl.innerHTML = assets.map(a => assetCard(a)).join('') ||
+        emptyState('まだ画像がありません', 'ファイルを選択して「アップロード」を押してください。取り込みが完了すると、画像や動画を言葉で検索できます。', 'upload', '＋ ファイルを選んで追加');
+      assetsEl.removeAttribute('aria-busy');
       setView(activeView);
       assetsEl.querySelectorAll('[data-del]').forEach(btn => {{
         btn.onclick = () => runAction(async () => {{
@@ -455,16 +505,21 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     async function refreshProducts() {{
       const body = await requestJson('/api/library/products');
       productCache = body.products || [];
+      document.querySelectorAll('[data-product-caption]').forEach(caption => {{
+        const id = caption.dataset.productCaption;
+        caption.textContent = productCache.find(p => p.product_id === id)?.name || id;
+      }});
       const selected = uploadProduct.value;
-      uploadProduct.innerHTML = '<option value="">商品を紐づける（任意）</option>' + productCache.map(p =>
+      uploadProduct.innerHTML = '<option value="">商品を選ぶ（任意）</option>' + productCache.map(p =>
         `<option value="${{esc(p.product_id)}}">${{esc(p.name)}} (${{esc(p.product_id)}})</option>`
       ).join('');
       uploadProduct.value = productCache.some(p => p.product_id === selected) ? selected : '';
       productsEl.innerHTML = productCache.map(p =>
-        `<div class="product-row"><code>${{esc(p.product_id)}}</code><span>${{esc(p.name)}}</span>
-          <div class="actions"><button data-pname="${{esc(p.product_id)}}" aria-label="${{esc(p.name)}}の商品名を変更">名前変更</button>
-          <button class="danger" data-pdel="${{esc(p.product_id)}}" aria-label="${{esc(p.name)}}を削除">削除</button></div></div>`
-      ).join('') || '<p class="muted">登録された商品はありません</p>';
+        `<article class="product-row"><span class="product-name">${{esc(p.name)}}</span><span class="product-code">商品コード：${{esc(p.product_id)}}</span>
+          <details class="card-menu"><summary aria-label="${{esc(p.name)}}の商品操作">⋯</summary><div class="menu-content"><button data-pname="${{esc(p.product_id)}}" aria-label="${{esc(p.name)}}の商品名を変更">名前変更</button>
+          <button class="danger" data-pdel="${{esc(p.product_id)}}" aria-label="${{esc(p.name)}}を削除">削除</button></div></details></article>`
+      ).join('') || emptyState('商品がまだ登録されていません', '商品コードと商品名を登録しましょう。ライブラリでアップロードする際に、素材と紐づけられます。', 'product', '最初の商品を登録');
+      setView(activeView);
       productsEl.querySelectorAll('[data-pname]').forEach(btn => {{
         btn.onclick = () => runAction(async () => {{
           const product = productCache.find(p => p.product_id === btn.dataset.pname);
@@ -498,8 +553,40 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       currentFolder = folderCache.find(f => f.folder_id === currentFolder)?.parent_id || null;
       await refreshAll();
     }});
-    document.getElementById('libraryTab').onclick = () => setView('library');
-    document.getElementById('searchTab').onclick = () => setView('search');
+    views.forEach((view, index) => {{
+      const tab = document.getElementById(view + 'Tab');
+      tab.onclick = () => setView(view);
+      tab.onkeydown = event => {{
+        let next;
+        if (event.key === 'ArrowRight') next = (index + 1) % views.length;
+        else if (event.key === 'ArrowLeft') next = (index + views.length - 1) % views.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = views.length - 1;
+        else return;
+        event.preventDefault();
+        setView(views[next]);
+        document.getElementById(views[next] + 'Tab').focus();
+      }};
+    }});
+    document.getElementById('dismissImport').onclick = () => {{ document.getElementById('importBanner').hidden = true; }};
+    document.addEventListener('click', event => {{
+      document.querySelectorAll('.card-menu[open]').forEach(menu => {{
+        if (!menu.contains(event.target)) menu.open = false;
+      }});
+      const action = event.target.closest('[data-empty-action]')?.dataset.emptyAction;
+      if (action === 'upload') {{
+        setView('library');
+        if (!busy) {{ fileInput.focus(); fileInput.click(); }}
+      }} else if (action === 'search') document.getElementById('q').focus();
+      else if (action === 'product') document.getElementById('newProductId').focus();
+    }});
+    document.addEventListener('keydown', event => {{
+      if (event.key !== 'Escape') return;
+      document.querySelectorAll('.card-menu[open]').forEach(menu => {{
+        if (menu.contains(document.activeElement)) menu.querySelector('summary').focus();
+        menu.open = false;
+      }});
+    }});
     fileInput.onchange = updateFileLabel;
     document.getElementById('folderForm').onsubmit = event => {{
       event.preventDefault();
@@ -541,19 +628,22 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       fileInput.disabled = true;
       uploadProduct.disabled = true;
       try {{
-        setStatus(`アップロード中 0/${{files.length}}…`, 'busy');
+        setImportStatus(`${{files.length}} 件のファイルをアップロード中…`, 'busy');
         const fd = new FormData();
         files.forEach(f => fd.append('files', f));
         if (currentFolder) fd.append('folder_id', currentFolder);
         if (uploadProduct.value) fd.append('product_id', uploadProduct.value);
         const body = await requestJson('/api/library/upload', {{method: 'POST', body: fd}});
         const n = (body.assets || []).length || (body.asset ? 1 : 0);
-        setStatus(`${{n}} 件アップロード完了。検索用データを作成します…`, 'busy');
+        setImportStatus(`${{n}} 件アップロード完了。検索用データを作成します…`, 'busy');
         fileInput.value = '';
         updateFileLabel();
         await refreshAssets();
         if (body.job && body.job.job_id) await pollJob(body.job.job_id);
-        else setStatus(`${{n}} 件アップロード完了`, 'ok');
+        else setImportStatus(`${{n}} 件アップロード完了`, 'ok');
+      }} catch (error) {{
+        setImportStatus(error instanceof TypeError ? '通信できませんでした。接続を確認して再度お試しください。' : error.message, 'err');
+        throw error;
       }} finally {{
         busy = false;
         uploadBtn.disabled = false;
@@ -581,23 +671,29 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
           if (request !== searchRequest) return;
           const hits = body.results || [];
           resultCount = hits.length;
-          out.innerHTML = hits.map((r, i) => assetCard(r, i, true)).join('') ||
-            emptyState('見つかりませんでした。', '別の言葉で探すか、素材の種類を「すべて」にしてお試しください。');
+          out.innerHTML = hits.map(r => assetCard(r, true)).join('') ||
+            emptyState('一致する素材がありません', '別の言葉で検索するか、素材の種類を「すべて」にしてお試しください。', 'search', '検索条件を変更');
           setView(activeView);
           setStatus(`検索結果 ${{hits.length}} 件`, 'ok');
         }} catch (error) {{
           if (request !== searchRequest) return;
-          out.innerHTML = emptyState('検索できませんでした。', '接続や検索条件を確認して、もう一度検索してください。');
+          out.innerHTML = emptyState('検索できませんでした', '接続や検索条件を確認して、もう一度検索してください。', 'search', '検索欄へ戻る');
           throw error;
         }} finally {{
           if (request === searchRequest) out.removeAttribute('aria-busy');
         }}
       }});
     }};
-    out.innerHTML = emptyState('探していた一枚に、もう一度。', '上の検索欄に情景や名前を入力すると、ここに検索結果が並びます。');
+    out.innerHTML = emptyState('言葉で素材を探しましょう', '上の検索欄に「海辺の風景」「赤いバッグ」などの言葉を入力してください。ここに検索結果が表示されます。', 'search', '検索欄に入力');
+    assetsEl.innerHTML = emptyState('ライブラリを読み込み中…', '画像・動画とフォルダを取得しています。');
     runAction(async () => {{
-      await refreshAll();
-      if (!statusEl.className) setStatus('素材を選ぶか、言葉で検索してください');
+      try {{
+        await refreshAll();
+        if (!statusEl.className) setStatus('待機中');
+      }} catch (error) {{
+        assetsEl.innerHTML = emptyState('ライブラリを読み込めませんでした', '接続を確認して、ページを再読み込みしてください。');
+        throw error;
+      }} finally {{ assetsEl.removeAttribute('aria-busy'); }}
     }});
   </script>
 </body>

@@ -1,83 +1,88 @@
-# Design brief: media-search Library UI (014)
+# Design brief: media-search Library UI (014 v2)
 
-## Problem
+## Feedback addressed
 
-Current `/` UI reads as an **internal verification console**: raw embedder IDs,
-stacked forms, English/Japanese mix, card-less but still “admin CRUD dump”.
-Operators need a **product-feeling media library + search** surface.
+v1「暗室アーカイブ」は比喩が伝わらず、色も運用しづらい。  
+**普通に使える画像管理（DAM）画面**に作り直す。
 
-## Users & jobs
+## Product framing
 
-1. **Find** — type meaning / name → see ranked media fast  
-2. **Browse** — folders → grid of assets  
-3. **Ingest** — upload (+ optional product) → wait for Import  
-4. **Organize** — rename / move / delete; manage product master (secondary)
+- Brand: **media-search**
+- Screen title: **メディアライブラリ**
+- Audience: 社内オペレーター（アップロード・整理・意味検索）
+
+## Jobs to be done（画面上で一目で分かること）
+
+| Job | UI での置き場 |
+|-----|----------------|
+| 探す | 上部グローバル検索（常時見える） |
+| 見る・整理する | 「ライブラリ」タブ（フォルダ + グリッド） |
+| 入れる | ライブラリの目立つ「アップロード」 |
+| 商品を紐づける | アップロード時の商品選択 + 「商品」タブ |
+| 状態を知る | Import 進捗バナー（成功/失敗が色で分かる） |
 
 ## Information architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Brand: media-search                    [subtle status chip] │
-│  ═══════════════════════════════════════════════════════════ │
-│  SEARCH HERO (primary)                                       │
-│  [ 意味・名前で探す…                    ] [種類▾] [検索]     │
-└─────────────────────────────────────────────────────────────┘
-┌──────────────┬──────────────────────────────────────────────┐
-│ LIBRARY NAV  │  MAIN                                         │
-│ Folders      │  Mode tabs:  ライブラリ  |  検索結果           │
-│ + new folder │  Toolbar: Upload · Product select · crumb     │
-│              │  Asset GRID (thumb dominant, not admin rows)  │
-│ ──────────── │                                               │
-│ Products     │  (Search mode shows result grid here)         │
-│ (collapsed)  │                                               │
-└──────────────┴──────────────────────────────────────────────┘
-footer: embedder mode (muted, not hero)
+┌──────────────────────────────────────────────────────────────┐
+│ media-search          [ 🔍 キーワード・意味で検索… ] [検索]   │
+├──────────────────────────────────────────────────────────────┤
+│  [ライブラリ]  [検索結果]  [商品]          状態: 待機中       │
+├────────────┬─────────────────────────────────────────────────┤
+│ フォルダ    │  パンくず / 件数                                │
+│ ・すべて    │  [アップロード] [商品を選ぶ▾] [ファイル選択]     │
+│ ・…         │                                                 │
+│ + 新規      │  ■ ■ ■ ■   サムネグリッド                        │
+│             │  ■ ■ ■ ■   名前・種類・商品・操作(⋯)            │
+└────────────┴─────────────────────────────────────────────────┘
 ```
 
-### Hierarchy rules
+### Rules
 
-- **Search is the hero** — first viewport is brand + one search field + one CTA.  
-- **Library is the workspace** — folders + visual grid.  
-- **Products are secondary** — collapsible section, not competing with upload.  
-- **Hide debug** — `mode=` / model id only in footer.  
-- **Status** — slim toast/banner under hero (Import progress), not a big dump box.  
-- **Japanese UI chrome** — labels JA; keep API/asset ids in muted mono.
+1. **3タブだけ** — ライブラリ / 検索結果 / 商品。迷わせない。  
+2. **検索は常時ヘッダー** — メイン作業と分離。  
+3. **ライブラリがデフォルト** — 管理システムの主戦場。  
+4. **商品は専用タブ** — ライブラリを散らかさない。  
+5. **操作はカード上の「⋯」またはホバー** — 一覧を CRUD ボタンだらけにしない。  
+6. **技術情報はフッター** — embedder 等。  
+7. **日本語 UI** — ボタン・タブ・空状態すべて JA。
 
-## Visual direction (“暗室アーカイブ”)
+## Visual direction（「スタジオライト」）
 
-Not a purple SaaS dashboard. Not cream+terracotta magazine. Not newspaper grid.
+暗室・パープルグラデ・クリーム+テラコッタ・新聞調は禁止。
 
-| Token | Value |
-|-------|--------|
-| Mood | Quiet darkroom / film archive |
-| BG | deep charcoal `#141618` with subtle grain |
-| Surface | `#1e2124` |
-| Text | `#ece8e1` |
-| Muted | `#9a958c` |
-| Accent | warm amber `#e2a15a` (search / focus only) |
-| Danger | soft coral `#d9786a` |
-| Fonts | Display: **Zen Old Mincho**; UI: **IBM Plex Sans JP** (Google Fonts) |
-| Radius | 2–6px (slightly sharp, archival) |
-| Motion | 2–3 only: hero fade-in, result stagger, status pulse while Import busy |
+| Token | Value | Role |
+|-------|--------|------|
+| BG | `#f4f5f7` | アプリ地 |
+| Surface | `#ffffff` | パネル・カード |
+| Ink | `#1a1d21` | 本文 |
+| Muted | `#5c6570` | 補助 |
+| Line | `#e2e5ea` | 区切り |
+| Accent | `#126b5f` | 主ボタン・選択（落ち着いた緑青） |
+| Accent soft | `#e6f3f0` | 選択背景 |
+| Warn | `#9a6700` | Import 中 |
+| Danger | `#b42318` | 削除・エラー |
+| Font UI | **IBM Plex Sans JP** | 可読性優先 |
+| Font brand | **Fraunces** (latin) + JA fallback Plex | ロゴ付近のみ |
+| Radius | 8px | カード |
+| Shadow | 極薄い `0 1px 2px rgb(0 0 0 / 6%)` | カードのみ |
 
 ### Composition
 
-- Full-bleed dark field; soft radial highlight behind search (not purple glow).  
-- Asset **grid** (2–4 cols): large thumb, name, type/SKU caption — actions on hover.  
-- No dashboard stat strips; no badge piles; no floating chips on thumbs.
+- 明るい・広く・余白多め（管理画面として読みやすい）。  
+- サムネは正方形寄り `aspect-ratio: 1 / 1`、名前は下。  
+- 空状態は「まだ画像がありません」+ アップロード導線。  
+- モーションは控えめ: タブ切替 fade、Import 中のドット点滅のみ。
 
 ## Technical constraints
 
-- Keep **single-file HTML** in `src/media_search/api/app.py` `_ui_html()` (no React).  
-- Preserve **all existing API calls** and behaviors (upload→pollJob, folders, products, search).  
-- Accessibility: focus rings, contrast, button labels.  
-- Mobile: stack sidebar above main; search stays sticky-ish near top.
+- 変更は `src/media_search/api/app.py` の `_ui_html()` が中心。  
+- 既存 API 挙動を維持（upload→pollJob、folders、products、search、rename/move/delete）。  
+- 単一 HTML（React 禁止）。  
+- f-string の `{{` / `}}` に注意。
 
-## Out of scope
+## Acceptance
 
-- New APIs, AI caption dual-index, auth UI, dark/light toggle.
-
-## Acceptance (feel)
-
-Opening `/` should feel like a **product**, not a pytest harness. Someone should
-remember: dark archive + amber search bar + image grid.
+開いた瞬間に「画像を管理する画面」と分かる。  
+検索・アップロード・フォルダ・商品の入口が説明なしで辿れる。  
+色が落ち着き、業務利用に耐える。
