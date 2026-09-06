@@ -79,8 +79,33 @@ The workflow / `make deploy` builds with `INSTALL_SEMANTIC=1`, `INSTALL_GCP=1`, 
 `PREWARM_OPENCLIP=1` (CPU torch wheels — CUDA wheels OOM on Cloud Run), pushes
 to `media-search-repo`, and deploys Cloud Run env for GCS.
 
-Service (009): `--min-instances=1` and `--no-cpu-throttling` keep OpenCLIP warm
-(ongoing cost). Import Job: 4 CPU / 16Gi and `IMPORT_EMBED_WORKERS=4`.
+Service (018): `--min=0 --min-instances=0 --cpu-throttling` allows scale-to-zero
+and request-based billing. Both service and revision minimums are zero in local
+and GitHub deploy commands and Terraform. CLI deployments set service and revision
+maximums to one (`--max=1 --max-instances=1`), matching the subsequent user Console
+setting. Terraform sets revision maximum one, but its Google 6.x provider cannot
+declare the service-level maximum; a Terraform service update is not guaranteed
+to preserve that separate setting. After such an update, reapply it explicitly:
+
+```bash
+gcloud run services update media-search --project=laperm-507708 \
+  --region=asia-northeast1 --max=1
+```
+
+These are configured autoscaling limits, not a hard billing cap. This replaces
+the always-warm 009 policy. The URL stays available: a request automatically starts an instance when
+none is running. The first request after an idle period waits for container,
+OpenCLIP and index startup; subsequent requests can reuse the warm instance.
+Cloud Run controls idle shutdown timing, so zero minimum is not an immediate
+stop command or a promise that no instance will ever remain temporarily idle.
+GCS keeps media, index snapshots and job status across restarts.
+
+Import Job remains 4 CPU / 16Gi with `IMPORT_EMBED_WORKERS=4`, running only when
+invoked. The web service continues to enqueue this separate Job, so request-based
+CPU allocation does not suspend the import after the HTTP response completes.
+
+See [Cloud Run minimum instances](https://cloud.google.com/run/docs/configuring/min-instances)
+and [billing settings](https://cloud.google.com/run/docs/configuring/billing-settings).
 
 ## Cost controls (013)
 
@@ -109,9 +134,12 @@ Caller needs **Billing Account** permission to create budgets.
 **Email channel:** confirm the Monitoring notification channel verification mail
 if Google sends one (alerts will not deliver until verified).
 
-Main cost drivers today: Cloud Run `min-instances=1`, Import Job size, GCS
-storage/egress, occasional BigQuery eval. Raise `monthly_budget_usd` when the
-alert is too tight — do not disable billing from automation in this repo.
+Main cost drivers today: Cloud Run request processing/startup time, Import Job
+execution, image annotation calls, GCS storage/egress, Artifact Registry storage,
+and occasional BigQuery eval. Scale-to-zero removes the always-on compute floor;
+it does not make total billing zero. The budget remains alert-only. Raise
+`monthly_budget_usd` when the alert is too tight — do not disable billing from
+automation in this repo.
 
 Dockerfile is **multi-stage** (`deps` → `models` → `runtime`): torch/OpenCLIP
 install and HF weight bake are cached unless `pyproject.toml` / embedder code

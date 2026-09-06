@@ -152,6 +152,10 @@ resource "google_cloud_run_v2_service" "app" {
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
 
+  scaling {
+    min_instance_count = 0
+  }
+
   # IAP enablement: prefer `gcloud beta run services update --iap=enabled` or Console
   # after IAM below (provider attribute support varies). See docs/run-gcp-iap.md.
 
@@ -170,7 +174,7 @@ resource "google_cloud_run_v2_service" "app" {
             cpu    = "2"
             memory = "8Gi"
           }
-          cpu_idle          = false
+          cpu_idle          = true
           startup_cpu_boost = true
         }
       startup_probe {
@@ -260,8 +264,8 @@ resource "google_cloud_run_v2_service" "app" {
       }
     }
     scaling {
-      min_instance_count = 1
-      max_instance_count = 2
+      min_instance_count = 0
+      max_instance_count = 1
     }
   }
 
