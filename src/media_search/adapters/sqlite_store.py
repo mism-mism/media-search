@@ -137,14 +137,18 @@ class SqliteMetadataRepository:
         n = needle.strip().lower()
         if not n:
             return []
-        # Escape LIKE metacharacters; match display_name or tags_json substring.
+        # Treat user input literally; decode each tag so JSON escaping and
+        # separators neither hide real matches nor create false ones.
         like = "%" + n.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         with self._lock:
             rows = self._conn.execute(
                 """
                 SELECT * FROM assets
                 WHERE lower(display_name) LIKE ? ESCAPE '\\'
-                   OR lower(tags_json) LIKE ? ESCAPE '\\'
+                   OR EXISTS (
+                     SELECT 1 FROM json_each(assets.tags_json) AS tag
+                     WHERE lower(tag.value) LIKE ? ESCAPE '\\'
+                   )
                 ORDER BY asset_id
                 """,
                 (like, like),

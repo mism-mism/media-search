@@ -80,6 +80,13 @@ image search (POST /api/search/by-image)
 Empty text query is invalid. Bare image search is **visual similar**; SKU-grade
 requires `product_id` metadata (hybrid D6). Auth remains IAP for 007.
 
+Text search ranks literal display-name/tag substring matches before semantic-only
+matches (015). Each group uses descending score, then asset ID for ties; the
+returned score retains its existing meaning and is not a global rank across
+groups. Tags are searched as individual decoded strings, including Japanese,
+quotes and backslashes, so existing data needs no reimport. `%` and `_` are
+literal characters. Image search keeps its visual score ordering.
+
 Vector search is a **formal product requirement**, constrained to a
 **local / single-runtime** existing engine via adapters. Managed or distributed
 large-scale vector infrastructure is out of scope for 001.

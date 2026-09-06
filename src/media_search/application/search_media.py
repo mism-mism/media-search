@@ -146,7 +146,12 @@ class SearchMediaAssets:
                 )
             )
 
-        hits.sort(key=lambda h: h.score, reverse=True)
+        if isinstance(query, SearchQuery):
+            # A literal metadata match must survive top_k even when the
+            # visual embedding assigns semantic-only candidates higher scores.
+            hits.sort(key=lambda h: ("text" not in h.match_kinds, -h.score, h.asset.asset_id))
+        else:
+            hits.sort(key=lambda h: h.score, reverse=True)
         return hits[: query.top_k]
 
 
