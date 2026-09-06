@@ -1,6 +1,6 @@
 ---
 id: "017"
-status: active
+status: completed
 profile: lean
 profile_reason: "Local UI entry to existing import endpoint; no API, domain, auth or storage changes"
 ---
