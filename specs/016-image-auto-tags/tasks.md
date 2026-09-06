@@ -6,8 +6,8 @@
 - [x] T030 Gemini adapter and configuration with boundary tests (AC5/AC6).
 - [x] T040 Add API/card visibility and configuration guidance (AC1/AC5/AC6).
 - [x] T050 Run and record small real-image generation/retrieval sample (AC7).
-- [ ] T060 Independent Inner/Outer reviews and required gates (AC8).
-- [ ] T070 Release reviewed feature and report production/backfill state.
+- [x] T060 Independent Inner/Outer reviews and required gates (AC8).
+- [x] T070 Release reviewed feature and report production/backfill state.
 
 ## Implementation evidence
 
@@ -22,4 +22,9 @@
 - Actual Gemini: 3 calls succeeded; 3/3 Japanese query hits after SQLite reload using neutral names.
 - Terraform validate passed outside sandbox (provider could not start inside sandbox).
 - Deployment env edits are declarative configuration; validated by Terraform and review,
-  without writing tests that mirror strings. No production deployment/backfill yet.
+  without writing tests that mirror strings.
+- All six independent Inner/Outer evaluator artifacts PASS. Complete-artifact feature verify,
+  post-implement, pre-review and commit-scoped pre-merge passed; PR CI run 34038811288 succeeded.
+- Production release and service-account Gemini smoke passed. Existing corpus backfill and
+  browser-authenticated production upload/search were not run; see
+  [release evidence](../../docs/research/016-image-auto-tags-release.md).

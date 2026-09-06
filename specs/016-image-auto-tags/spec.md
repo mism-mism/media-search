@@ -1,6 +1,6 @@
 ---
 id: "016"
-status: active
+status: completed
 profile: full
 profile_reason: "Image enrichment provider, persisted provenance, import behavior and additive API fields"
 ---
