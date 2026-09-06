@@ -38,3 +38,40 @@ production inference or deployment. CI, feature-scoped lifecycle gates after
 all review artifacts exist, and deployment verification remain the
 implementer's AC4 release obligations. This PASS concerns test adequacy and
 the observed local evidence, not overall release completion.
+
+## Follow-up review — 2026-09-07 — PASS
+
+Independently reevaluated the working-tree correction on
+`fix/017-review-followups` against `origin/main` (`2d1bedb`), covering reopened
+AC5–AC7 and PR #19 comments `discussion_r3944364304` / `discussion_r3944364305`.
+This judgment supersedes the original review for this correction; the earlier
+review and initial release history remain preserved. No code or tests were
+modified by this evaluator.
+
+- Independently executed `.venv/bin/python -m pytest -q
+  tests/test_reimport_ui.py tests/test_import_jobs.py`: **11 passed**, with two
+  existing dependency deprecation warnings. Seven scenarios exercise the
+  emitted UI handlers; four tests cover existing import/job behavior.
+- AC5: the enqueue-error fixture now matches the actual endpoint's HTTP 409
+  object detail (`error: import_busy`, `holder`). The UI assertion requires the
+  fixed Japanese busy explanation and checks that the status does not expose
+  the holder. Inspection confirms only this known 409 error is translated;
+  arbitrary object details are not rendered. Existing string-detail handling
+  remains intact.
+- AC6: the new synchronous fixture matches `ImportResponse`'s three arrays.
+  Its assertions require exactly one request, exactly one card refresh, a
+  completion banner, and restored controls. The malformed nested-job fixture
+  requires an error banner, no polling, and no card refresh, preventing the
+  former false-completion fallback. Inspection confirms null/missing payloads
+  also fall through to the explicit unknown-response error.
+- AC7: rendered HTML assertions now require both failed-generation and
+  cap-deferred image wording while retaining whole-library scope and the
+  default limit. The async success, failed job, polling network failure,
+  duplicate-click exclusion, and upload scenarios continue to pass.
+
+No blocking test gap found for this correction. The implementer reports the
+full regression suite at **150 passed / 1 optional skip** and observed failing
+tests before the fix; those are reported evidence, while the 11-test result
+above was observed directly by this evaluator. Full-browser follow-up checks,
+current-review lifecycle gates, CI, and corrected deployment evidence remain
+release obligations and are not asserted complete by this test-review PASS.

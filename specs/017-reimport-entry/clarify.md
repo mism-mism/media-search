@@ -8,3 +8,7 @@ implementation choices within the requested fix.
 ## Open Questions
 
 None.
+
+User on 2026-09-07 requested addressing PR #19 review comments. Correct the real
+409 contract, synchronous response coverage, and retry wording; no backend contract
+or automatic polling-recovery workflow change is introduced.

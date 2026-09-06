@@ -34,3 +34,31 @@
 - Browser click flow used controlled API responses locally. Logged-in production
   browser interaction and actual whole-corpus reimport were not executed.
 - User entry: reload the page → ライブラリ → below upload controls → 再取り込み.
+
+## PR #19 review follow-up (2026-09-07)
+
+The external review comments were not handled before the initial merge. Preserve
+that release history above; reopen this feature for the requested corrections.
+
+- [x] T050 Match the real busy response, cover synchronous/unknown responses, and clarify retry targets (AC5–AC7).
+- [ ] T060 Independent lean reevaluation, lifecycle gates and CI for the correction.
+- [ ] T070 Deploy the correction and link evidence back to the PR #19 comments.
+
+### Follow-up evidence and review disposition
+
+- PR19 discussion_r3944364304: changed the 409 fixture to object detail matching the server;
+  fixed Japanese busy text asserted, holder not shown. Red actual generic 409 text,
+  then Green with explicit import_busy translation.
+- PR19 discussion_r3944364305: added sync summary scenario (one POST/no GET,
+  one card refresh/success/re-enabled controls). Also added nested job response failure
+  test; it exposed a false success banner, fixed by accepting only known shapes.
+- Review prose item 3: toolbar now explicitly includes failed and cap-deferred images.
+- Full suite: 150 passed, 1 optional OpenCLIP skip, log c097aee4 under
+  /private/tmp/media-search-017-followup-logs/logs/2026-09-07/.
+- Remaining risk dispositions: network/poll interruption retains the existing
+  server lock; this correction makes the next 409 understandable, without adding
+  an unrequested automatic progress-resumption workflow. The label says default 50,
+  not the configured absolute limit; runtime config remains documented separately.
+  Regex handler tests are supplemented by actual Chrome executing the whole script.
+  Independent review is by separate role invocation (docs/RUNTIME.md), not distinct
+  commits; all 3 independent roles are being rerun for this correction.

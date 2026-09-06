@@ -339,7 +339,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         </div>
         <p id="uploadHint" class="muted upload-hint">JPG・PNG・MP4 ／ 複数選択できます。商品を紐づけて、現在のフォルダにアップロード。</p>
         <div class="reimport-toolbar">
-          <div class="reimport-copy"><strong>既存画像のAIタグ・説明を追加</strong><p id="reimportHint" class="muted">全フォルダの素材を再確認し、未生成の画像を処理します（1回あたり既定50枚まで）。生成済みの内容は再利用します。</p></div>
+          <div class="reimport-copy"><strong>既存画像のAIタグ・説明を追加</strong><p id="reimportHint" class="muted">全フォルダの素材を再確認し、未生成の画像・生成に失敗した画像・上限で見送った画像を処理します（1回あたり既定50枚まで）。生成済みの内容は再利用します。</p></div>
           <button id="reimport" type="button" aria-describedby="reimportHint">再取り込み</button>
         </div>
         <div id="assets" class="asset-grid" aria-label="ライブラリの素材" aria-busy="true"></div>
@@ -420,6 +420,9 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         try {{
           const body = await res.json();
           if (typeof body.detail === 'string') detail = body.detail;
+          else if (res.status === 409 && body.detail?.error === 'import_busy') {{
+            detail = '別の取り込みが実行中です。完了後にもう一度お試しください。';
+          }}
         }} catch (_) {{ /* Non-JSON failures still report their HTTP status. */ }}
         throw new Error(`操作に失敗しました（${{res.status}}）${{detail ? '：' + detail : '。もう一度お試しください。'}}`);
       }}
@@ -726,10 +729,12 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       try {{
         setImportStatus('再取り込みを開始しています…', 'busy');
         const body = await requestJson('/api/import', {{method: 'POST'}});
-        if (body.job_id) await pollJob(body.job_id);
-        else {{
+        if (typeof body?.job_id === 'string' && body.job_id.trim()) await pollJob(body.job_id);
+        else if (Array.isArray(body?.imported) && Array.isArray(body?.updated) && Array.isArray(body?.skipped)) {{
           await refreshAssets();
           setImportStatus('再取り込みが完了しました。画像のAIタグ・説明をご確認ください。', 'ok');
+        }} else {{
+          throw new Error('取り込みの開始結果を確認できませんでした。画面を再読み込みして状況をご確認ください。');
         }}
       }} catch (error) {{
         setImportStatus(error instanceof TypeError ? '通信できませんでした。接続を確認して再度お試しください。' : error.message, 'err');
