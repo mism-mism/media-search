@@ -1,0 +1,67 @@
+{
+  "sample_limit": 3,
+  "calls": 3,
+  "reference_equals_positive_target": true,
+  "results": [
+    {
+      "file": "01-cat.jpg",
+      "expected": "match",
+      "report": {
+        "catalog_version": "4ad3ce87f7f4e94fc43982546916f684aafc0f96dbb1c98746c0732240b4e1c7",
+        "decisions": [
+          {
+            "category_id": "sample-cat",
+            "name": "猫が写っている",
+            "outcome": "match",
+            "reason": "画像の中央に猫の顔と前足がはっきりと写っており、猫の姿が明確に確認できるため。"
+          }
+        ],
+        "model_id": "gemini-3.1-flash-lite",
+        "prompt_version": "ja-reference-presence-v1",
+        "image_sha256": ""
+      },
+      "correct": true
+    },
+    {
+      "file": "02-dog.jpg",
+      "expected": "no_match",
+      "report": {
+        "catalog_version": "4ad3ce87f7f4e94fc43982546916f684aafc0f96dbb1c98746c0732240b4e1c7",
+        "decisions": [
+          {
+            "category_id": "sample-cat",
+            "name": "猫が写っている",
+            "outcome": "no_match",
+            "reason": "画像に写っているのは犬であり、猫は確認できません。"
+          }
+        ],
+        "model_id": "gemini-3.1-flash-lite",
+        "prompt_version": "ja-reference-presence-v1",
+        "image_sha256": ""
+      },
+      "correct": true
+    },
+    {
+      "file": "07-flower.jpg",
+      "expected": "no_match",
+      "report": {
+        "catalog_version": "4ad3ce87f7f4e94fc43982546916f684aafc0f96dbb1c98746c0732240b4e1c7",
+        "decisions": [
+          {
+            "category_id": "sample-cat",
+            "name": "猫が写っている",
+            "outcome": "no_match",
+            "reason": "画像には黄色い花が写っていますが、猫の姿は確認できません。"
+          }
+        ],
+        "model_id": "gemini-3.1-flash-lite",
+        "prompt_version": "ja-reference-presence-v1",
+        "image_sha256": ""
+      },
+      "correct": true
+    }
+  ],
+  "persisted_keyword_hits": [
+    "IMG_0.jpg"
+  ]
+}

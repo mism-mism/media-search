@@ -44,17 +44,25 @@ class GeminiImageAnnotator:
     def annotate(self, image_bytes: bytes) -> ImageAnnotation:
         try:
             jpeg = self._jpeg(image_bytes)
-            session = getattr(self._local, "session", None)
-            if session is None:
-                session = self._session_factory()
-                self._local.session = session
-            response = session.post(self._url, json=self._request(jpeg), timeout=45, allow_redirects=False)
-            if response.status_code != 200:
-                raise ValueError("provider rejected request")
-            return self._parse(response.json())
+            return self._parse(self.generate_content(self._request(jpeg)))
         except Exception:
             # Do not put provider bodies, credentials or model text in job errors.
             raise ImageAnnotationError("generation_failed") from None
+
+    @property
+    def model_id(self) -> str:
+        return self._model
+
+    def generate_content(self, request: dict) -> dict:
+        """Shared bounded authenticated transport for import-time Gemini tasks."""
+        session = getattr(self._local, "session", None)
+        if session is None:
+            session = self._session_factory()
+            self._local.session = session
+        response = session.post(self._url, json=request, timeout=45, allow_redirects=False)
+        if response.status_code != 200:
+            raise ValueError("provider rejected request")
+        return response.json()
 
     @staticmethod
     def _jpeg(image_bytes: bytes) -> bytes:
