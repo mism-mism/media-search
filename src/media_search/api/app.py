@@ -174,6 +174,11 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     #fileName {{ flex: 1 1 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
     #uploadProduct {{ max-width: 215px; }}
     .upload-hint {{ margin: 9px 0 24px; font-size: .75rem; }}
+    .reimport-toolbar {{ display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 16px 0; margin-bottom: 20px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }}
+    .reimport-copy {{ flex: 1 1 240px; min-width: 0; }}
+    .reimport-copy strong {{ font-size: .85rem; font-weight: 500; }}
+    #reimportHint {{ margin: 5px 0 0; font-size: .75rem; line-height: 1.6; }}
+    #reimport {{ min-height: 44px; }}
     .asset-grid {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }}
     .asset-card {{ position: relative; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 2px rgb(0 0 0 / 6%); }}
     .asset-card:focus-within {{ border-color: var(--accent); }}
@@ -333,6 +338,10 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
           <button id="upload" class="primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/></svg>アップロード</button>
         </div>
         <p id="uploadHint" class="muted upload-hint">JPG・PNG・MP4 ／ 複数選択できます。商品を紐づけて、現在のフォルダにアップロード。</p>
+        <div class="reimport-toolbar">
+          <div class="reimport-copy"><strong>既存画像のAIタグ・説明を追加</strong><p id="reimportHint" class="muted">全フォルダの素材を再確認し、未生成の画像を処理します（1回あたり既定50枚まで）。生成済みの内容は再利用します。</p></div>
+          <button id="reimport" type="button" aria-describedby="reimportHint">再取り込み</button>
+        </div>
         <div id="assets" class="asset-grid" aria-label="ライブラリの素材" aria-busy="true"></div>
       </div>
     </section>
@@ -376,6 +385,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     const crumbPath = document.getElementById('crumbPath');
     const folderListLabel = document.getElementById('folderListLabel');
     const uploadBtn = document.getElementById('upload');
+    const reimportBtn = document.getElementById('reimport');
     const uploadProduct = document.getElementById('uploadProduct');
     const fileInput = document.getElementById('file');
     const views = ['library', 'search', 'products'];
@@ -395,6 +405,13 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       document.getElementById('importStatus').textContent = msg;
       document.getElementById('dismissImport').hidden = kind === 'busy';
       setStatus(kind === 'busy' ? '取り込み中' : (kind === 'err' ? '取り込みに失敗' : '取り込み完了'), kind);
+    }}
+    function setImportBusy(value) {{
+      busy = value;
+      uploadBtn.disabled = value;
+      reimportBtn.disabled = value;
+      fileInput.disabled = value;
+      uploadProduct.disabled = value;
     }}
     async function requestJson(url, options) {{
       const res = await fetch(url, options);
@@ -703,14 +720,27 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         await refreshProducts();
       }});
     }};
+    reimportBtn.onclick = () => runAction(async () => {{
+      if (busy) return;
+      setImportBusy(true);
+      try {{
+        setImportStatus('再取り込みを開始しています…', 'busy');
+        const body = await requestJson('/api/import', {{method: 'POST'}});
+        if (body.job_id) await pollJob(body.job_id);
+        else {{
+          await refreshAssets();
+          setImportStatus('再取り込みが完了しました。画像のAIタグ・説明をご確認ください。', 'ok');
+        }}
+      }} catch (error) {{
+        setImportStatus(error instanceof TypeError ? '通信できませんでした。接続を確認して再度お試しください。' : error.message, 'err');
+        throw error;
+      }} finally {{ setImportBusy(false); }}
+    }});
     uploadBtn.onclick = () => runAction(async () => {{
       const files = Array.from(fileInput.files || []);
       if (!files.length) {{ setStatus('アップロードするファイルを選んでください', 'err'); fileInput.focus(); return; }}
       if (busy) return;
-      busy = true;
-      uploadBtn.disabled = true;
-      fileInput.disabled = true;
-      uploadProduct.disabled = true;
+      setImportBusy(true);
       try {{
         setImportStatus(`${{files.length}} 件のファイルをアップロード中…`, 'busy');
         const fd = new FormData();
@@ -729,10 +759,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         setImportStatus(error instanceof TypeError ? '通信できませんでした。接続を確認して再度お試しください。' : error.message, 'err');
         throw error;
       }} finally {{
-        busy = false;
-        uploadBtn.disabled = false;
-        fileInput.disabled = false;
-        uploadProduct.disabled = false;
+        setImportBusy(false);
       }}
     }});
     document.getElementById('searchForm').onsubmit = event => {{
