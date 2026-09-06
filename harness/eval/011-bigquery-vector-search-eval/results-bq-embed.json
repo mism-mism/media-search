@@ -1,0 +1,5 @@
+{
+  "pass": "bq-embed",
+  "status": "skipped",
+  "reason": "Set BQ_EMBED_ENABLE=1 to run AI.GENERATE_EMBEDDING / Vertex remote model (spend + 004 interactive-default caution). Default skip keeps D6 ceiling and D4 spirit for this bake-off; BYO path covers VECTOR_SEARCH."
+}

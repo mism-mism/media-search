@@ -1,0 +1,385 @@
+{
+  "corpus": "/Users/masami/Code/ai/media-search/data/corpus-web",
+  "passes": [
+    {
+      "pass": "local",
+      "model_id": "open_clip:xlm-roberta-base-ViT-B-32/laion5b_s13b_b90k",
+      "n_images": 18,
+      "n_queries": 20,
+      "hit_at_1": 0.9,
+      "hit_at_1_count": 18,
+      "index_wall_seconds": 0.528,
+      "search_wall_seconds": 0.654,
+      "search_p95_proxy_seconds": 0.033,
+      "results": [
+        {
+          "id": "en01",
+          "q": "a cat",
+          "hint": "01-cat",
+          "top": "01-cat.jpg",
+          "score": 0.24509647488594055,
+          "hit@1": true
+        },
+        {
+          "id": "en02",
+          "q": "a dog",
+          "hint": "02-dog",
+          "top": "02-dog.jpg",
+          "score": 0.22370760142803192,
+          "hit@1": true
+        },
+        {
+          "id": "en03",
+          "q": "sandy beach ocean",
+          "hint": "03-beach",
+          "top": "03-beach.jpg",
+          "score": 0.2471488118171692,
+          "hit@1": true
+        },
+        {
+          "id": "en04",
+          "q": "red sports car",
+          "hint": "17-car",
+          "top": "17-car.jpg",
+          "score": 0.1411350965499878,
+          "hit@1": true
+        },
+        {
+          "id": "en05",
+          "q": "plate of food",
+          "hint": "16-food",
+          "top": "16-food.jpg",
+          "score": 0.20020633935928345,
+          "hit@1": true
+        },
+        {
+          "id": "en06",
+          "q": "mountain landscape",
+          "hint": "04-mountain",
+          "top": "04-mountain.jpg",
+          "score": 0.22720830142498016,
+          "hit@1": true
+        },
+        {
+          "id": "en07",
+          "q": "kitchen interior",
+          "hint": "18-kitchen",
+          "top": "20-market.jpg",
+          "score": 0.1969948410987854,
+          "hit@1": false
+        },
+        {
+          "id": "en08",
+          "q": "desert sand dunes",
+          "hint": "12-desert",
+          "top": "12-desert.jpg",
+          "score": 0.19426104426383972,
+          "hit@1": true
+        },
+        {
+          "id": "en09",
+          "q": "bridge over water",
+          "hint": "10-bridge",
+          "top": "10-bridge.jpg",
+          "score": 0.23446576297283173,
+          "hit@1": true
+        },
+        {
+          "id": "en10",
+          "q": "colorful flower",
+          "hint": "07-flower",
+          "top": "07-flower.jpg",
+          "score": 0.2004755735397339,
+          "hit@1": true
+        },
+        {
+          "id": "ja01",
+          "q": "\u732b",
+          "hint": "01-cat",
+          "top": "01-cat.jpg",
+          "score": 0.24678894877433777,
+          "hit@1": true
+        },
+        {
+          "id": "ja02",
+          "q": "\u72ac",
+          "hint": "02-dog",
+          "top": "02-dog.jpg",
+          "score": 0.22856810688972473,
+          "hit@1": true
+        },
+        {
+          "id": "ja03",
+          "q": "\u7802\u6d5c",
+          "hint": "03-beach",
+          "top": "03-beach.jpg",
+          "score": 0.21219992637634277,
+          "hit@1": true
+        },
+        {
+          "id": "ja04",
+          "q": "\u8d64\u3044\u8eca",
+          "hint": "17-car",
+          "top": "17-car.jpg",
+          "score": 0.12946003675460815,
+          "hit@1": true
+        },
+        {
+          "id": "ja05",
+          "q": "\u6599\u7406",
+          "hint": "16-food",
+          "top": "16-food.jpg",
+          "score": 0.17332696914672852,
+          "hit@1": true
+        },
+        {
+          "id": "ja06",
+          "q": "\u5c71\u306e\u666f\u8272",
+          "hint": "04-mountain",
+          "top": "04-mountain.jpg",
+          "score": 0.1884637326002121,
+          "hit@1": true
+        },
+        {
+          "id": "ja07",
+          "q": "\u30ad\u30c3\u30c1\u30f3",
+          "hint": "18-kitchen",
+          "top": "20-market.jpg",
+          "score": 0.1308629810810089,
+          "hit@1": false
+        },
+        {
+          "id": "ja08",
+          "q": "\u7802\u6f20",
+          "hint": "12-desert",
+          "top": "12-desert.jpg",
+          "score": 0.19099459052085876,
+          "hit@1": true
+        },
+        {
+          "id": "ja09",
+          "q": "\u6a4b",
+          "hint": "10-bridge",
+          "top": "10-bridge.jpg",
+          "score": 0.1892358958721161,
+          "hit@1": true
+        },
+        {
+          "id": "ja10",
+          "q": "\u82b1",
+          "hint": "07-flower",
+          "top": "07-flower.jpg",
+          "score": 0.20563796162605286,
+          "hit@1": true
+        }
+      ]
+    },
+    {
+      "pass": "bq-byo",
+      "status": "ok",
+      "project": "laperm-507708",
+      "table": "laperm-507708.media_search_eval_011.embeddings_byo_stable",
+      "model_id": "open_clip:xlm-roberta-base-ViT-B-32/laion5b_s13b_b90k",
+      "n_images": 18,
+      "n_queries": 20,
+      "hit_at_1": 0.9,
+      "hit_at_1_count": 18,
+      "index_wall_seconds": 3.632,
+      "search_wall_seconds": 31.871,
+      "search_p95_seconds": 1.837,
+      "results": [
+        {
+          "id": "en01",
+          "q": "a cat",
+          "hint": "01-cat",
+          "top": "01-cat.jpg",
+          "distance": 0.7549035810363567,
+          "hit@1": true,
+          "latency_s": 1.344
+        },
+        {
+          "id": "en02",
+          "q": "a dog",
+          "hint": "02-dog",
+          "top": "02-dog.jpg",
+          "distance": 0.7762923840108653,
+          "hit@1": true,
+          "latency_s": 1.666
+        },
+        {
+          "id": "en03",
+          "q": "sandy beach ocean",
+          "hint": "03-beach",
+          "top": "03-beach.jpg",
+          "distance": 0.7528512279974722,
+          "hit@1": true,
+          "latency_s": 1.586
+        },
+        {
+          "id": "en04",
+          "q": "red sports car",
+          "hint": "17-car",
+          "top": "17-car.jpg",
+          "distance": 0.858864914835544,
+          "hit@1": true,
+          "latency_s": 1.511
+        },
+        {
+          "id": "en05",
+          "q": "plate of food",
+          "hint": "16-food",
+          "top": "16-food.jpg",
+          "distance": 0.7997936892848859,
+          "hit@1": true,
+          "latency_s": 1.662
+        },
+        {
+          "id": "en06",
+          "q": "mountain landscape",
+          "hint": "04-mountain",
+          "top": "04-mountain.jpg",
+          "distance": 0.7727916764592202,
+          "hit@1": true,
+          "latency_s": 1.675
+        },
+        {
+          "id": "en07",
+          "q": "kitchen interior",
+          "hint": "18-kitchen",
+          "top": "20-market.jpg",
+          "distance": 0.8030051943100871,
+          "hit@1": false,
+          "latency_s": 1.466
+        },
+        {
+          "id": "en08",
+          "q": "desert sand dunes",
+          "hint": "12-desert",
+          "top": "12-desert.jpg",
+          "distance": 0.8057389626929006,
+          "hit@1": true,
+          "latency_s": 1.487
+        },
+        {
+          "id": "en09",
+          "q": "bridge over water",
+          "hint": "10-bridge",
+          "top": "10-bridge.jpg",
+          "distance": 0.7655342666803473,
+          "hit@1": true,
+          "latency_s": 1.635
+        },
+        {
+          "id": "en10",
+          "q": "colorful flower",
+          "hint": "07-flower",
+          "top": "07-flower.jpg",
+          "distance": 0.7995244305415707,
+          "hit@1": true,
+          "latency_s": 1.695
+        },
+        {
+          "id": "ja01",
+          "q": "\u732b",
+          "hint": "01-cat",
+          "top": "01-cat.jpg",
+          "distance": 0.7532110505146791,
+          "hit@1": true,
+          "latency_s": 1.431
+        },
+        {
+          "id": "ja02",
+          "q": "\u72ac",
+          "hint": "02-dog",
+          "top": "02-dog.jpg",
+          "distance": 0.7714319070113694,
+          "hit@1": true,
+          "latency_s": 1.832
+        },
+        {
+          "id": "ja03",
+          "q": "\u7802\u6d5c",
+          "hint": "03-beach",
+          "top": "03-beach.jpg",
+          "distance": 0.787800089853818,
+          "hit@1": true,
+          "latency_s": 1.407
+        },
+        {
+          "id": "ja04",
+          "q": "\u8d64\u3044\u8eca",
+          "hint": "17-car",
+          "top": "17-car.jpg",
+          "distance": 0.8705399680566539,
+          "hit@1": true,
+          "latency_s": 1.498
+        },
+        {
+          "id": "ja05",
+          "q": "\u6599\u7406",
+          "hint": "16-food",
+          "top": "16-food.jpg",
+          "distance": 0.8266730195606602,
+          "hit@1": true,
+          "latency_s": 1.407
+        },
+        {
+          "id": "ja06",
+          "q": "\u5c71\u306e\u666f\u8272",
+          "hint": "04-mountain",
+          "top": "04-mountain.jpg",
+          "distance": 0.8115362591353718,
+          "hit@1": true,
+          "latency_s": 1.511
+        },
+        {
+          "id": "ja07",
+          "q": "\u30ad\u30c3\u30c1\u30f3",
+          "hint": "18-kitchen",
+          "top": "20-market.jpg",
+          "distance": 0.8691370469545316,
+          "hit@1": false,
+          "latency_s": 2.153
+        },
+        {
+          "id": "ja08",
+          "q": "\u7802\u6f20",
+          "hint": "12-desert",
+          "top": "12-desert.jpg",
+          "distance": 0.8090054193314982,
+          "hit@1": true,
+          "latency_s": 1.837
+        },
+        {
+          "id": "ja09",
+          "q": "\u6a4b",
+          "hint": "10-bridge",
+          "top": "10-bridge.jpg",
+          "distance": 0.8107641566661831,
+          "hit@1": true,
+          "latency_s": 1.751
+        },
+        {
+          "id": "ja10",
+          "q": "\u82b1",
+          "hint": "07-flower",
+          "top": "07-flower.jpg",
+          "distance": 0.7943620432428024,
+          "hit@1": true,
+          "latency_s": 1.317
+        }
+      ]
+    },
+    {
+      "pass": "bq-embed",
+      "status": "skipped",
+      "reason": "Set BQ_EMBED_ENABLE=1 to run AI.GENERATE_EMBEDDING / Vertex remote model (spend + 004 interactive-default caution). Default skip keeps D6 ceiling and D4 spirit for this bake-off; BYO path covers VECTOR_SEARCH."
+    }
+  ],
+  "product_sample": {
+    "product_id_sample": "not_run",
+    "note": "No live product_id library export wired in this harness run; 008 synthetic SKU Recall protocol remains available via scripts/sku-embedder-eval. Re-run 011 with a product-tagged corpus when available."
+  },
+  "verdict": "no-go-interactive",
+  "verdict_detail": "bq-byo search p95=1.837s \u2265 1s (D3); quality hit@1=0.90 vs local 0.90"
+}
