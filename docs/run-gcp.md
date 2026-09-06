@@ -82,6 +82,37 @@ to `media-search-repo`, and deploys Cloud Run env for GCS.
 Service (009): `--min-instances=1` and `--no-cpu-throttling` keep OpenCLIP warm
 (ongoing cost). Import Job: 4 CPU / 16Gi and `IMPORT_EMBED_WORKERS=4`.
 
+## Cost controls (013)
+
+GCP **Billing budgets alert; they do not hard-stop charges.** 013 wires a
+monthly project budget (Terraform + live `gcloud` create):
+
+| Setting | Locked value |
+|---------|----------------|
+| Amount | **USD 50** / calendar month |
+| Thresholds | 50% / 90% / 100% of current spend |
+| Notify | `mishima0304@gmail.com` (Monitoring email channel) |
+
+```bash
+# terraform.tfvars (gitignored):
+# billing_account    = "01XXXX-XXXXXX-XXXXXX"
+# monthly_budget_usd = 50
+# budget_alert_email = "mishima0304@gmail.com"
+
+cd infra/terraform && terraform apply
+# or one-shot:
+# gcloud billing budgets create --billing-account=… --budget-amount=50USD …
+```
+
+Caller needs **Billing Account** permission to create budgets.
+
+**Email channel:** confirm the Monitoring notification channel verification mail
+if Google sends one (alerts will not deliver until verified).
+
+Main cost drivers today: Cloud Run `min-instances=1`, Import Job size, GCS
+storage/egress, occasional BigQuery eval. Raise `monthly_budget_usd` when the
+alert is too tight — do not disable billing from automation in this repo.
+
 Dockerfile is **multi-stage** (`deps` → `models` → `runtime`): torch/OpenCLIP
 install and HF weight bake are cached unless `pyproject.toml` / embedder code
 changes, so app-only edits rebuild much faster.

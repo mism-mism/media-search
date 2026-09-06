@@ -15,3 +15,8 @@
 #
 # Personal projects (no Org): after apply, enable IAP once in Cloud Run Console
 # so Google can attach a custom OAuth client. See docs/run-gcp-iap.md.
+#
+# Feature 013 — monthly budget alerts (alert-only; does NOT stop billing):
+# billing_account     = "01XXXX-XXXXXX-XXXXXX"  # gcloud billing accounts list
+# monthly_budget_usd  = 50
+# budget_alert_email  = "you@gmail.com"
