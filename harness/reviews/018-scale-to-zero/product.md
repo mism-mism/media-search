@@ -38,3 +38,35 @@ revision/traffic, minimum and CPU-throttling configuration, and preserved IAP.
 It does not measure zero idle instances, authenticated cold-start latency, or
 real billing effects. Live verification is separate from this PR's acceptance
 scope, so none of those runtime outcomes is asserted by this review.
+
+
+## Follow-up review: maximum one
+
+PASS
+
+Independently reevaluated the follow-up diff from `2d8cefc` against the updated
+AC1/AC2 and recorded operator decision. The original review above remains
+historical evidence.
+
+- AC1: both local and GitHub deploy commands add `--max=1 --max-instances=1`,
+  while retaining both zero minimums and request-based CPU billing.
+- AC2: Terraform changes revision maximum from two to one and preserves minimum
+  zero, CPU idling, resource sizing, IAM/IAP and the import Job. The updated AC,
+  clarification and runbook explicitly acknowledge that Google 6.x cannot
+  declare the service maximum and require `gcloud run services update ...
+  --max=1` after Terraform service updates. This is an explicit operational
+  limitation, not a claim that Terraform preserves the unmodeled setting.
+- AC3: existing cold-start, idle shutdown and remaining-charge guidance remains
+  intact. The new text correctly distinguishes configured autoscaling limits
+  from a hard billing cap and provides a concrete operator command.
+- AC4: reviewed the recorded successful Google 6.50.0 validation and deployment
+  syntax checks, plus the independent test and code-quality follow-up PASS
+  artifacts. The test review records the implementer's successful regression
+  and lifecycle checks. Final gates and the existing PR/CI update remain the
+  implementer's pending delivery steps and are not claimed complete here.
+
+No product gap found against the updated scope. Retaining the provider major
+version follows the recorded implementation constraint; the service-maximum
+operator responsibility is visible rather than silently promised away. No
+application or live resource changes were made by this reviewer, and this
+verdict does not establish measured runtime instance counts or billing effects.

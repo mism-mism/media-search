@@ -265,7 +265,7 @@ resource "google_cloud_run_v2_service" "app" {
     }
     scaling {
       min_instance_count = 0
-      max_instance_count = 2
+      max_instance_count = 1
     }
   }
 

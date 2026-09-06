@@ -7,3 +7,7 @@
 - [x] T050 Commit, push and create PR (no merge in this task).
 
 PR: https://github.com/mism-mism/media-search/pull/21 (open; not merged).
+
+- [x] T060 Record observed user Console maximum-one setting and update AC.
+- [x] T070 Preserve maximum one in CLI, CD and Terraform; explain in runbook.
+- [ ] T080 Reevaluate changed settings, rerun required gates and update PR/CI.

@@ -41,3 +41,33 @@ Initial gates failed for absent review artifacts and are not represented as PASS
 Live idle instance counts, authenticated cold-start latency, and real billing
 effects are not demonstrated by these checks and remain outside this PR's stated
 verification scope.
+
+## Follow-up review — 2026-09-07
+
+PASS
+
+Reevaluated the configuration delta from `2d8cefc` against the updated AC1/AC2
+and the explicit Google 6.x limitation in `clarify.md`; the earlier review above
+is retained as historical evidence.
+
+- Independently reran `make -n deploy`: the service command now includes both
+  `--max=1` and `--max-instances=1`, while both zero minimums and
+  `--cpu-throttling` remain present. The GitHub workflow diff contains the same
+  additions without changing import Job arguments.
+- Terraform changes revision maximum from two to one. It does not introduce the
+  service maximum field rejected by Google 6.50.0. Minimums, CPU idling, resource
+  sizes, access control, and application code are unchanged.
+- `verification.md` records final provider 6.50.0 validation PASS and successful
+  dry-run/GitHub shell syntax checks. The implementer also reports successful
+  post-implement/pre-review checks and the unchanged 150-test regression result;
+  no duplicate suite was necessary for this bounded configuration delta.
+- The unsupported service maximum is an explicitly documented limitation, with
+  a concrete command to reapply it after Terraform service updates. Neither the
+  updated AC nor the runbook claims that Terraform preserves this unmodeled
+  setting. The runbook also avoids treating autoscaling limits as a billing cap.
+- Independently ran `git diff --check`: PASS. No blocking test-coverage gap found
+  for the updated scope; no cloud mutation or provider-major migration performed.
+
+This review does not establish production idle counts, concurrency behavior,
+or billing outcomes. Updated Outer review, final gates, and PR/CI completion
+remain the implementer's responsibility.

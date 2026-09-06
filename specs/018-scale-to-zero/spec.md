@@ -1,6 +1,6 @@
 ---
 id: "018"
-status: completed
+status: active
 profile: lean
 profile_reason: "Deployment resource policy only; no domain, architecture, API, or security boundary change"
 ---
@@ -15,9 +15,13 @@ future deployments from restoring an always-on instance.
 ## Acceptance Criteria
 
 - AC1. Local and GitHub deployment commands explicitly set service and revision
-  minimum instances to zero and use request-based CPU billing.
+  minimum instances to zero, maximum instances to one, and use request-based
+  CPU billing.
 - AC2. Terraform declares zero service/revision minimum instances and CPU idling;
-  service resources, maximum instances, IAP/IAM and import Job stay unchanged.
+  revision maximum instances match the current production cap of one.
+  Document the Google 6.x provider limitation: service maximum is set through
+  CLI deployment, and must be reapplied after Terraform service changes.
+  CPU/memory, IAP/IAM and import Job stay unchanged.
 - AC3. Operator documentation explains idle scale-down, automatic startup on
   requests, cold-start latency, and remaining usage/storage charges without
   promising immediate scale-down or zero total billing.

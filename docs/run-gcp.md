@@ -81,8 +81,19 @@ to `media-search-repo`, and deploys Cloud Run env for GCS.
 
 Service (018): `--min=0 --min-instances=0 --cpu-throttling` allows scale-to-zero
 and request-based billing. Both service and revision minimums are zero in local
-and GitHub deploy commands and Terraform. This replaces the always-warm 009
-policy. The URL stays available: a request automatically starts an instance when
+and GitHub deploy commands and Terraform. CLI deployments set service and revision
+maximums to one (`--max=1 --max-instances=1`), matching the subsequent user Console
+setting. Terraform sets revision maximum one, but its Google 6.x provider cannot
+declare the service-level maximum; a Terraform service update is not guaranteed
+to preserve that separate setting. After such an update, reapply it explicitly:
+
+```bash
+gcloud run services update media-search --project=laperm-507708 \
+  --region=asia-northeast1 --max=1
+```
+
+These are configured autoscaling limits, not a hard billing cap. This replaces
+the always-warm 009 policy. The URL stays available: a request automatically starts an instance when
 none is running. The first request after an idle period waits for container,
 OpenCLIP and index startup; subsequent requests can reuse the warm instance.
 Cloud Run controls idle shutdown timing, so zero minimum is not an immediate
