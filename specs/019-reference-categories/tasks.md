@@ -4,7 +4,7 @@
 - [x] T020 Import reuse/failure/cap and Gemini strict multimodal tests, Red→Green.
 - [x] T030 Management API, safe uploads, shared worker wiring and visible UI.
 - [x] T040 Browser verification, bounded real sample and operator documentation.
-- [ ] T050 Independent Inner/Outer evaluations, gates, commit and PR/CI.
+- [x] T050 Independent Inner/Outer evaluations, gates, commit and PR/CI.
 
 ## Inner review iteration 1
 - [x] T060 Reviewer found equal-byte-length replacement incorrectly reused matches;
@@ -28,8 +28,27 @@
   invalidate request generation immediately after successful create/delete.
 - Browser Red: harness/eval/019-reference-categories/browser.cjs failed with
   stale search card count 1 after catalog creation (expected0).
-- [ ] T080 Reevaluate Inner and Product/Final after rendered create/delete +
+- [x] T080 Reevaluate Inner and Product/Final after rendered create/delete +
   delayed response regression, then rerun all required gates and PR CI.
 
 - T070 browser Green: four scenarios passed; independent Inner addenda PASS.
 - Final implementation suite: 180 passed / 1 optional OpenCLIP skip (4e75fa5d).
+
+## PR handoff (2026-09-07 JST)
+
+- Separate worktree `/private/tmp/media-search-019-reference-categories`, branch
+  `feature/019-reference-categories`; implementation d4afe18, main synchronization
+  3faa9d2 includes merged scale-to-zero PR21 without changing its settings.
+- PR https://github.com/mism-mism/media-search/pull/22 is open for review;
+  category feature is not merged or deployed and no production corpus import ran.
+- Independent full Inner + Outer reviews PASS. Completed-artifact post-implement
+  (3205c919), pre-review (b75555b5), feature-scoped nested verify and exact
+  diff-scoped pre-merge (e7d5ea8b, then fed03875 after main synchronization) PASS.
+- Code-head GitHub CI 34045234526 succeeded, including authoritative pre-merge.
+  This final documentation update remains subject to its own CI run.
+- Actual Chrome management checks passed at 1280/390px after the final UI fix;
+  four cached/delayed search invalidation scenarios passed. Local test server
+  was stopped after validation.
+- Real Gemini calls were limited to three; source and quality limitations remain
+  explicit in docs/research/019-reference-category-eval.md. No additional cloud
+  resources were created for this feature.
