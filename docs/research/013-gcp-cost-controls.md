@@ -11,11 +11,9 @@ Date: 2026-09-06
 | Filter | project `laperm-507708` (`142769597956`) |
 | Amount | **50 USD** / MONTH |
 | Thresholds | 50% / 90% / 100% CURRENT_SPEND |
-| Channel | `projects/laperm-507708/notificationChannels/1755512545472650656` → `mishima0304@gmail.com` |
+| Channel | Monitoring email → `Mishima0304@gmail.com` (+ Billing Account Admin default recipients) |
 
-Created via `gcloud billing budgets` (local Terraform binary not available in this
-environment). Equivalent resources are in `infra/terraform/main.tf` for future
-`terraform apply` / import.
+Created via `gcloud billing budgets`. Equivalent Terraform in `infra/terraform/main.tf`.
 
 ## Semantics
 
@@ -23,4 +21,9 @@ environment). Equivalent resources are in `infra/terraform/main.tf` for future
 
 ## Operator action
 
-Verify the Monitoring email channel if Google sent a confirmation link.
+1. Check Gmail **inbox + spam/プロモーション** for “Google Cloud Monitoring” /
+   verification code.
+2. If a code arrives, verify the channel in Cloud Console → Monitoring →
+   Alerting → Notification channels.
+3. Billing Account Admin (`Mishima0304@gmail.com`) also receives budget emails
+   via default IAM recipients (no channel verify required for that path).

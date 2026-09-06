@@ -91,7 +91,7 @@ monthly project budget (Terraform + live `gcloud` create):
 |---------|----------------|
 | Amount | **USD 50** / calendar month |
 | Thresholds | 50% / 90% / 100% of current spend |
-| Notify | `mishima0304@gmail.com` (Monitoring email channel) |
+| Notify | `Mishima0304@gmail.com` (Monitoring email channel; Billing admin also notified) |
 
 ```bash
 # terraform.tfvars (gitignored):
