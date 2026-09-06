@@ -59,8 +59,11 @@ deploy:
 	  --memory=8Gi \
 	  --port=8080 \
 	  --timeout=300 \
-	  --min-instances=1 \
-	  --no-cpu-throttling \
+	  --min=0 \
+	  --min-instances=0 \
+	  --max=1 \
+	  --max-instances=1 \
+	  --cpu-throttling \
 	  --update-env-vars="$(ANNOTATION_ENV),EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,IMPORT_JOB_BACKEND=cloudrun,CLOUD_RUN_IMPORT_JOB=$(JOB),GOOGLE_CLOUD_PROJECT=$(PROJECT),CLOUD_RUN_REGION=$(REGION),GCS_BUCKET=$(BUCKET),MEDIA_SEARCH_DB_GCS=gs://$(BUCKET)/state/media-local-cos.db"; \
 	if gcloud run jobs describe "$(JOB)" --project="$(PROJECT)" --region="$(REGION)" >/dev/null 2>&1; then \
 	  JOB_CMD=update; \
