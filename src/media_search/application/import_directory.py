@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import threading
 import uuid
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,6 +17,7 @@ from media_search.domain.frames import (
 )
 from media_search.domain.media_asset import MediaAsset, MediaType
 from media_search.ports.embedding import EmbeddingPort
+from media_search.ports.annotation import ImageAnnotationError, ImageAnnotationPort
 from media_search.ports.frame_store import FrameStorePort
 from media_search.ports.media_probe import MediaProbePort
 from media_search.ports.media_storage import MediaStoragePort
@@ -40,7 +42,7 @@ class _PreparedAsset:
     key: str
     asset: MediaAsset
     existed: bool
-    frames: list[tuple[str, float, list[float], bytes | None]]
+    frames: list[tuple[str, float, list[float], bytes | None]] | None
     # frame_key, position, vector, optional jpeg for frame store
 
 
@@ -55,6 +57,8 @@ class ImportDirectory:
         work_dir: Path | None = None,
         frame_store: FrameStorePort | None = None,
         embed_workers: int | None = None,
+        annotator: ImageAnnotationPort | None = None,
+        max_annotations: int = 50,
     ) -> None:
         self._embedder = embedder
         self._vectors = vectors
@@ -62,6 +66,10 @@ class ImportDirectory:
         self._media_probe = media_probe
         self._work_dir = work_dir
         self._frame_store = frame_store
+        self._annotator = annotator
+        if max_annotations < 1:
+            raise ValueError("max_annotations must be positive")
+        self._max_annotations = max_annotations
         if embed_workers is None:
             embed_workers = int(os.environ.get("IMPORT_EMBED_WORKERS", "4"))
         self._embed_workers = max(1, embed_workers)
@@ -85,6 +93,16 @@ class ImportDirectory:
             keys = storage.list_media_keys()
         total = len(keys)
         processed = 0
+        annotation_count = 0
+        annotation_lock = threading.Lock()
+
+        def claim_annotation() -> bool:
+            nonlocal annotation_count
+            with annotation_lock:
+                if annotation_count >= self._max_annotations:
+                    return False
+                annotation_count += 1
+                return True
 
         def _bump() -> None:
             nonlocal processed
@@ -95,7 +113,7 @@ class ImportDirectory:
         try:
             with ThreadPoolExecutor(max_workers=self._embed_workers) as pool:
                 futures = {
-                    pool.submit(self._prepare_one, storage, stage, key): key
+                    pool.submit(self._prepare_one, storage, stage, key, claim_annotation): key
                     for key in keys
                 }
                 for fut in as_completed(futures):
@@ -103,10 +121,8 @@ class ImportDirectory:
                     try:
                         result = fut.result()
                     except Exception as exc:  # noqa: BLE001
-                        try:
-                            self._vectors.delete_asset_frames(key)
-                        except Exception:  # noqa: BLE001
-                            pass
+                        # Preparation has not written frames. Keep any previous
+                        # searchable version when materialization/enrichment fails.
                         summary.skipped.append(
                             ImportWarning(path=key, reason=f"import failed: {exc}")
                         )
@@ -121,31 +137,33 @@ class ImportDirectory:
                     assert isinstance(result, _PreparedAsset)
                     # Single-writer path: upsert frames + metadata serially.
                     try:
-                        self._vectors.delete_asset_frames(result.asset.asset_id)
-                        if self._frame_store is not None:
-                            self._frame_store.delete_prefix(
-                                result.asset.asset_id,
-                                max_frames=MAX_REPRESENTATIVE_FRAMES,
-                            )
-                        for frame_key, position, vector, jpeg in result.frames:
-                            if jpeg is not None and self._frame_store is not None:
-                                self._frame_store.put_jpeg(frame_key, jpeg)
-                            self._vectors.upsert_frame(
-                                asset_id=result.asset.asset_id,
-                                frame_key=frame_key,
-                                position=position,
-                                vector=vector,
-                            )
+                        if result.frames is not None:
+                            self._vectors.delete_asset_frames(result.asset.asset_id)
+                            if self._frame_store is not None:
+                                self._frame_store.delete_prefix(
+                                    result.asset.asset_id,
+                                    max_frames=MAX_REPRESENTATIVE_FRAMES,
+                                )
+                            for frame_key, position, vector, jpeg in result.frames:
+                                if jpeg is not None and self._frame_store is not None:
+                                    self._frame_store.put_jpeg(frame_key, jpeg)
+                                self._vectors.upsert_frame(
+                                    asset_id=result.asset.asset_id,
+                                    frame_key=frame_key,
+                                    position=position,
+                                    vector=vector,
+                                )
                         self._metadata.upsert(result.asset)
                         if result.existed:
                             summary.updated.append(result.asset.asset_id)
                         else:
                             summary.imported.append(result.asset.asset_id)
                     except Exception as exc:  # noqa: BLE001
-                        try:
-                            self._vectors.delete_asset_frames(key)
-                        except Exception:  # noqa: BLE001
-                            pass
+                        if result.frames is not None:
+                            try:
+                                self._vectors.delete_asset_frames(key)
+                            except Exception:  # noqa: BLE001
+                                pass
                         summary.skipped.append(
                             ImportWarning(path=key, reason=f"import failed: {exc}")
                         )
@@ -178,9 +196,15 @@ class ImportDirectory:
         storage: MediaStoragePort,
         stage: Path,
         key: str,
+        claim_annotation: Callable[[], bool],
     ) -> _PreparedAsset | ImportWarning:
         needs, existed, skip_reason = self._needs_embed(storage, key)
-        if not needs:
+        annotation_only = (
+            not needs and skip_reason == "unchanged" and self._annotator is not None
+            and existed is not None and existed.media_type == MediaType.IMAGE
+            and existed.annotation is None
+        )
+        if not needs and not annotation_only:
             return ImportWarning(path=key, reason=skip_reason or "unchanged")
 
         worker_stage = stage / f"w-{uuid.uuid4().hex}"
@@ -203,7 +227,21 @@ class ImportDirectory:
                 else:
                     asset = replace(asset, display_name=Path(key).name)
 
-                frames = self._embed_frames(local_path, asset)
+                if annotation_only:
+                    asset = existed
+                elif existed is not None and existed.size_bytes == asset.size_bytes:
+                    asset = replace(asset, annotation=existed.annotation, annotation_error=existed.annotation_error)
+
+                frames = None if annotation_only else self._embed_frames(local_path, asset)
+                if self._annotator is not None and asset.media_type == MediaType.IMAGE and asset.annotation is None:
+                    if claim_annotation():
+                        try:
+                            generated = self._annotator.annotate(local_path.read_bytes())
+                            asset = replace(asset, annotation=generated, annotation_error="")
+                        except ImageAnnotationError:
+                            asset = replace(asset, annotation=None, annotation_error="generation_failed")
+                    else:
+                        asset = replace(asset, annotation=None, annotation_error="limit_reached")
                 return _PreparedAsset(
                     key=key,
                     asset=asset,

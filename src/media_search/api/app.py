@@ -17,7 +17,7 @@ from media_search.application.search_media import (
     EmptyQueryError,
     SearchMediaAssets,
 )
-from media_search.domain.media_asset import MediaType
+from media_search.domain.media_asset import ImageAnnotation, MediaType
 from media_search.ports.frame_store import FrameStorePort
 from media_search.ports.import_job import ImportJobPort, ImportJobStatus
 from media_search.ports.import_lock import ImportLockBusy
@@ -516,6 +516,15 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         el.onclick = () => runAction(async () => {{ currentFolder = el.dataset.id; await refreshAll(); }});
       }});
     }}
+    function annotationHtml(asset) {{
+      if (asset.media_type !== 'image') return '';
+      if (asset.annotation) {{
+        const tags = asset.annotation.tags.map(tag => `<span class="type-badge">${{esc(tag)}}</span>`).join(' ');
+        return `<details class="ai-annotation"><summary>AIタグ・説明</summary><p>${{tags}}</p><p>${{esc(asset.annotation.description)}}</p><small class="muted">AIによる生成内容です</small></details>`;
+      }}
+      const labels = {{failed: 'AIタグ生成に失敗しました。再取り込みで再試行できます。', deferred: 'AIタグは次回の取り込みで生成します。'}};
+      return `<p class="muted">${{labels[asset.annotation_status] || 'AIタグは未生成です'}}</p>`;
+    }}
     function assetCard(asset, search = false) {{
       const name = asset.display_name || asset.asset_id;
       const url = '/api/assets/' + encodeURIComponent(asset.asset_id);
@@ -526,6 +535,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         <div class="asset-info">
           <div class="asset-name"><a href="${{esc(url)}}" title="${{esc(name)}}">${{esc(name)}}</a></div>
           <p class="asset-caption"><span class="type-badge">${{asset.media_type === 'video' ? '動画' : '画像'}}</span>${{asset.product_id ? `<span data-product-caption="${{esc(asset.product_id)}}">${{esc(productLabel)}}</span>` : ''}}${{search ? '<span>関連度 ' + Number(asset.score).toFixed(4) + '</span>' : ''}}</p>
+          ${{annotationHtml(asset)}}
         </div>
         ${{search ? '' : `<details class="card-menu"><summary aria-label="${{esc(name)}}の操作">⋯</summary><div class="menu-content">
           <button data-ren="${{esc(asset.asset_id)}}" aria-label="${{esc(name)}}の名前を変更">名前変更</button>
@@ -781,7 +791,12 @@ def thumbnail_url_for(*, media_type: str, asset_id: str, best_frame_key: str | N
     return f"/media/{quote(asset_id, safe='/')}"
 
 
-class SearchHitOut(BaseModel):
+class AnnotationFields(BaseModel):
+    annotation: ImageAnnotation | None = None
+    annotation_status: str = "pending"
+
+
+class SearchHitOut(AnnotationFields):
     asset_id: str
     media_type: str
     score: float
@@ -815,7 +830,7 @@ class TextSearchIn(BaseModel):
     )
 
 
-class AssetDetailOut(BaseModel):
+class AssetDetailOut(AnnotationFields):
     asset_id: str
     media_type: str
     mime_type: str
@@ -846,7 +861,7 @@ class FolderListOut(BaseModel):
     folders: list[FolderOut]
 
 
-class LibraryAssetOut(BaseModel):
+class LibraryAssetOut(AnnotationFields):
     asset_id: str
     display_name: str
     media_type: str
@@ -966,6 +981,8 @@ def _hits_out(hits) -> list[SearchHitOut]:
                 display_name=h.asset.display_name or h.asset.asset_id,
                 product_id=h.asset.product_id,
                 match_kinds=list(h.match_kinds),
+                annotation=h.asset.annotation,
+                annotation_status=h.asset.annotation_status,
             )
         )
     return results
@@ -1224,6 +1241,8 @@ def create_app(
                 best_frame_key=None,
             ),
             product_id=asset.product_id,
+            annotation=asset.annotation,
+            annotation_status=asset.annotation_status,
         )
 
     @app.get("/api/library/folders", response_model=FolderListOut)
@@ -1429,6 +1448,8 @@ def create_app(
             duration_seconds=asset.duration_seconds,
             tags=list(asset.tags),
             description=asset.description,
+            annotation=asset.annotation,
+            annotation_status=asset.annotation_status,
             media_url=f"/media/{asset.asset_id}",
             display_name=asset.display_name or asset.asset_id,
             folder_id=asset.folder_id,

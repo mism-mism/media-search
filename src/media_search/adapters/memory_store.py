@@ -34,10 +34,12 @@ class InMemoryMetadataRepository:
             return []
         out: list[MediaAsset] = []
         for a in self._items.values():
-            if n in (a.display_name or "").lower():
+            if n in (a.display_name or "").lower() or n in a.description.lower():
                 out.append(a)
                 continue
-            if any(n in t.lower() for t in a.tags):
+            if any(n in t.lower() for t in a.search_tags) or (
+                a.annotation is not None and n in a.annotation.description.lower()
+            ):
                 out.append(a)
         return out
 

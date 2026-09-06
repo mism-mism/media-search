@@ -9,6 +9,11 @@ REGION   ?= asia-northeast1
 SERVICE  ?= media-search
 JOB      ?= media-search-import
 IMAGE_TAG ?= latest
+IMAGE_ANNOTATION_BACKEND ?= gemini
+IMAGE_ANNOTATION_MODEL ?= gemini-3.1-flash-lite
+IMAGE_ANNOTATION_LOCATION ?= global
+IMAGE_ANNOTATION_MAX_PER_IMPORT ?= 50
+ANNOTATION_ENV := IMAGE_ANNOTATION_BACKEND=$(IMAGE_ANNOTATION_BACKEND),IMAGE_ANNOTATION_MODEL=$(IMAGE_ANNOTATION_MODEL),IMAGE_ANNOTATION_LOCATION=$(IMAGE_ANNOTATION_LOCATION),IMAGE_ANNOTATION_MAX_PER_IMPORT=$(IMAGE_ANNOTATION_MAX_PER_IMPORT)
 REPO     := $(REGION)-docker.pkg.dev/$(PROJECT)/media-search-repo
 IMAGE    := $(REPO)/media-search:$(IMAGE_TAG)
 BUCKET   := media-search-$(PROJECT)-media
@@ -56,7 +61,7 @@ deploy:
 	  --timeout=300 \
 	  --min-instances=1 \
 	  --no-cpu-throttling \
-	  --update-env-vars="EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,IMPORT_JOB_BACKEND=cloudrun,CLOUD_RUN_IMPORT_JOB=$(JOB),GOOGLE_CLOUD_PROJECT=$(PROJECT),CLOUD_RUN_REGION=$(REGION),GCS_BUCKET=$(BUCKET),MEDIA_SEARCH_DB_GCS=gs://$(BUCKET)/state/media-local-cos.db"; \
+	  --update-env-vars="$(ANNOTATION_ENV),EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_PREFIX=incoming,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,IMPORT_JOB_BACKEND=cloudrun,CLOUD_RUN_IMPORT_JOB=$(JOB),GOOGLE_CLOUD_PROJECT=$(PROJECT),CLOUD_RUN_REGION=$(REGION),GCS_BUCKET=$(BUCKET),MEDIA_SEARCH_DB_GCS=gs://$(BUCKET)/state/media-local-cos.db"; \
 	if gcloud run jobs describe "$(JOB)" --project="$(PROJECT)" --region="$(REGION)" >/dev/null 2>&1; then \
 	  JOB_CMD=update; \
 	else \
@@ -73,7 +78,7 @@ deploy:
 	  --max-retries=0 \
 	  --command=python \
 	  --args=-m,media_search.worker_import \
-	  --set-env-vars="IMPORT_MODE=worker,EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_BUCKET=$(BUCKET),GCS_PREFIX=incoming,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_DB_GCS=gs://$(BUCKET)/state/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,GOOGLE_CLOUD_PROJECT=$(PROJECT),CLOUD_RUN_REGION=$(REGION),IMPORT_EMBED_WORKERS=4"; \
+	  --set-env-vars="$(ANNOTATION_ENV),IMPORT_MODE=worker,EMBEDDER=local,MEDIA_BACKEND=gcs,GCS_BUCKET=$(BUCKET),GCS_PREFIX=incoming,FRAME_BACKEND=gcs,GCS_FRAMES_PREFIX=frames,IMPORT_LOCK_BACKEND=gcs,MEDIA_SEARCH_DATA=/tmp/media-search,MEDIA_SEARCH_DB=/tmp/media-search/media-local-cos.db,MEDIA_SEARCH_DB_GCS=gs://$(BUCKET)/state/media-local-cos.db,MEDIA_SEARCH_WORK=/tmp/media-search/work,GOOGLE_CLOUD_PROJECT=$(PROJECT),CLOUD_RUN_REGION=$(REGION),IMPORT_EMBED_WORKERS=4"; \
 	gcloud run jobs add-iam-policy-binding "$(JOB)" \
 	  --project="$(PROJECT)" --region="$(REGION)" \
 	  --member="serviceAccount:$$SA" \

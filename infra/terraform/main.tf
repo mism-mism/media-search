@@ -43,6 +43,15 @@ variable "embedder" {
   default = "local"
 }
 
+variable "image_annotation_backend" {
+  type    = string
+  default = "off"
+  validation {
+    condition     = contains(["off", "gemini"], var.image_annotation_backend)
+    error_message = "image_annotation_backend must be off or gemini."
+  }
+}
+
 variable "allow_unauthenticated" {
   type        = bool
   description = "If true, public invoker (002 v0 / non-prod). If false, IAP mode (production)."
@@ -86,6 +95,7 @@ resource "google_project_service" "services" {
     "artifactregistry.googleapis.com",
     "storage.googleapis.com",
     "iam.googleapis.com",
+    var.image_annotation_backend == "gemini" ? "aiplatform.googleapis.com" : "",
     "monitoring.googleapis.com",
     local.enable_budget ? "billingbudgets.googleapis.com" : "",
     local.iap_mode ? "iap.googleapis.com" : "",
@@ -118,6 +128,22 @@ resource "google_storage_bucket_iam_member" "run_media" {
   bucket = google_storage_bucket.media.name
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.run.email}"
+}
+
+# generateContent needs prediction permission, not model/resource administration.
+resource "google_project_iam_custom_role" "image_annotator" {
+  count       = var.image_annotation_backend == "gemini" ? 1 : 0
+  project     = var.project_id
+  role_id     = "mediaSearchImageAnnotator"
+  title       = "Media search image annotator"
+  permissions = ["aiplatform.endpoints.predict"]
+}
+
+resource "google_project_iam_member" "image_annotator" {
+  count   = var.image_annotation_backend == "gemini" ? 1 : 0
+  project = var.project_id
+  role    = google_project_iam_custom_role.image_annotator[0].name
+  member  = "serviceAccount:${google_service_account.run.email}"
 }
 
 resource "google_cloud_run_v2_service" "app" {
@@ -207,6 +233,22 @@ resource "google_cloud_run_v2_service" "app" {
       env {
         name  = "CLOUD_RUN_IMPORT_JOB"
         value = "${var.name_prefix}-import"
+      }
+      env {
+        name  = "IMAGE_ANNOTATION_BACKEND"
+        value = var.image_annotation_backend
+      }
+      env {
+        name  = "IMAGE_ANNOTATION_MODEL"
+        value = "gemini-3.1-flash-lite"
+      }
+      env {
+        name  = "IMAGE_ANNOTATION_LOCATION"
+        value = "global"
+      }
+      env {
+        name  = "IMAGE_ANNOTATION_MAX_PER_IMPORT"
+        value = "50"
       }
       env {
         name  = "GOOGLE_CLOUD_PROJECT"
@@ -331,6 +373,22 @@ resource "google_cloud_run_v2_job" "import" {
         env {
           name  = "MEDIA_SEARCH_WORK"
           value = "/tmp/media-search/work"
+        }
+        env {
+          name  = "IMAGE_ANNOTATION_BACKEND"
+          value = var.image_annotation_backend
+        }
+        env {
+          name  = "IMAGE_ANNOTATION_MODEL"
+          value = "gemini-3.1-flash-lite"
+        }
+        env {
+          name  = "IMAGE_ANNOTATION_LOCATION"
+          value = "global"
+        }
+        env {
+          name  = "IMAGE_ANNOTATION_MAX_PER_IMPORT"
+          value = "50"
         }
         env {
           name  = "GOOGLE_CLOUD_PROJECT"

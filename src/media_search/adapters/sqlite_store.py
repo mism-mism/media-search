@@ -9,7 +9,7 @@ from typing import Optional, Sequence
 import numpy as np
 import sqlite_vec
 
-from media_search.domain.media_asset import MediaAsset, MediaType
+from media_search.domain.media_asset import ImageAnnotation, MediaAsset, MediaType
 
 
 class SqliteMetadataRepository:
@@ -20,6 +20,7 @@ class SqliteMetadataRepository:
 
     def replace_connection(self, conn: sqlite3.Connection) -> None:
         with self._lock:
+            _ensure_annotation_columns(conn)
             self._conn = conn
 
     def _ensure_schema(self) -> None:
@@ -54,6 +55,7 @@ class SqliteMetadataRepository:
                 self._conn.execute("ALTER TABLE assets ADD COLUMN folder_id TEXT")
             if "product_id" not in cols:
                 self._conn.execute("ALTER TABLE assets ADD COLUMN product_id TEXT")
+            _ensure_annotation_columns(self._conn)
             self._conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS folders (
@@ -72,8 +74,8 @@ class SqliteMetadataRepository:
                 INSERT INTO assets(
                   asset_id, media_type, mime_type, size_bytes, width, height,
                   duration_seconds, tags_json, description, display_name, folder_id,
-                  product_id
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                  product_id, annotation_json, annotation_error
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(asset_id) DO UPDATE SET
                   media_type=excluded.media_type,
                   mime_type=excluded.mime_type,
@@ -85,7 +87,9 @@ class SqliteMetadataRepository:
                   description=excluded.description,
                   display_name=excluded.display_name,
                   folder_id=excluded.folder_id,
-                  product_id=excluded.product_id
+                  product_id=excluded.product_id,
+                  annotation_json=excluded.annotation_json,
+                  annotation_error=excluded.annotation_error
                 """,
                 (
                     asset.asset_id,
@@ -100,6 +104,8 @@ class SqliteMetadataRepository:
                     asset.display_name or asset.asset_id,
                     asset.folder_id,
                     asset.product_id,
+                    _annotation_json(asset.annotation),
+                    asset.annotation_error,
                 ),
             )
             self._conn.commit()
@@ -145,13 +151,19 @@ class SqliteMetadataRepository:
                 """
                 SELECT * FROM assets
                 WHERE lower(display_name) LIKE ? ESCAPE '\\'
+                   OR lower(description) LIKE ? ESCAPE '\\'
                    OR EXISTS (
                      SELECT 1 FROM json_each(assets.tags_json) AS tag
                      WHERE lower(tag.value) LIKE ? ESCAPE '\\'
                    )
+                   OR lower(json_extract(annotation_json, '$.description')) LIKE ? ESCAPE '\\'
+                   OR EXISTS (
+                     SELECT 1 FROM json_each(assets.annotation_json, '$.tags') AS tag
+                     WHERE lower(tag.value) LIKE ? ESCAPE '\\'
+                   )
                 ORDER BY asset_id
                 """,
-                (like, like),
+                (like, like, like, like, like),
             ).fetchall()
         return [_row_to_asset(r) for r in rows]
 
@@ -323,11 +335,35 @@ class SqliteProductRepository:
             self._conn.commit()
 
 
+def _ensure_annotation_columns(conn: sqlite3.Connection) -> None:
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(assets)")}
+    if "annotation_json" not in columns:
+        conn.execute("ALTER TABLE assets ADD COLUMN annotation_json TEXT")
+    if "annotation_error" not in columns:
+        conn.execute("ALTER TABLE assets ADD COLUMN annotation_error TEXT NOT NULL DEFAULT ''")
+    conn.commit()
+
+
+def _annotation_json(annotation: ImageAnnotation | None) -> str | None:
+    if annotation is None:
+        return None
+    from dataclasses import asdict
+
+    return json.dumps(asdict(annotation), ensure_ascii=False)
+
+
 def _row_to_asset(row: sqlite3.Row) -> MediaAsset:
     keys = row.keys()
     display = row["display_name"] if "display_name" in keys else ""
     folder_id = row["folder_id"] if "folder_id" in keys else None
     product_id = row["product_id"] if "product_id" in keys else None
+    annotation = None
+    if "annotation_json" in keys and row["annotation_json"]:
+        data = json.loads(row["annotation_json"])
+        annotation = ImageAnnotation(
+            tags=tuple(data["tags"]), description=data["description"],
+            model_id=data["model_id"], prompt_version=data["prompt_version"],
+        )
     return MediaAsset(
         asset_id=row["asset_id"],
         media_type=MediaType(row["media_type"]),
@@ -341,6 +377,8 @@ def _row_to_asset(row: sqlite3.Row) -> MediaAsset:
         display_name=display or row["asset_id"],
         folder_id=folder_id,
         product_id=product_id,
+        annotation=annotation,
+        annotation_error=row["annotation_error"] if "annotation_error" in keys else "",
     )
 
 
