@@ -26,365 +26,749 @@ from media_search.ports.search import ImageSearchQuery, MetadataRepositoryPort, 
 
 
 def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
-    warn = ""
-    if embedder_mode == "fake":
-        warn = (
-            '<p style="color:#a40;font-weight:600">'
-            "EMBEDDER=fake — semantic quality is off. Use local OpenCLIP for real search."
-            "</p>"
-        )
+    from html import escape
+
+    warn = (
+        '<p>検証用の埋め込みモデルです。意味検索の精度は評価できません。</p>'
+        if embedder_mode == "fake" else ""
+    )
     return f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>media-search library</title>
+  <meta name="theme-color" content="#f4f5f7" />
+  <title>メディアライブラリ — media-search</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&family=Fraunces:wght@500;600&display=swap" rel="stylesheet" />
   <style>
-    :root {{ font-family: ui-sans-serif, system-ui, sans-serif; color: #102015; }}
-    body {{ margin: 1.25rem; max-width: 1100px; }}
-    input, button, select {{ font: inherit; padding: 0.35rem 0.5rem; }}
-    .row {{ display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; align-items: center; }}
-    .layout {{ display: grid; grid-template-columns: 220px 1fr; gap: 1rem; }}
-    @media (max-width: 720px) {{ .layout {{ grid-template-columns: 1fr; }} }}
-    .panel {{ border: 1px solid #d5ddd7; padding: 0.75rem; min-height: 12rem; }}
-    .hit {{ display: grid; grid-template-columns: 96px 1fr auto; gap: 0.75rem;
-           border-top: 1px solid #d5ddd7; padding: 0.65rem 0; align-items: center; }}
-    .hit img {{ width: 96px; height: 72px; object-fit: cover; background: #eef2ef; }}
-    .muted {{ color: #5b6a60; font-size: 0.85rem; }}
-    .folder {{ display:block; padding: 0.25rem 0; cursor: pointer; }}
-    .folder.active {{ font-weight: 700; }}
-    a {{ color: #0b5; }}
-    #status {{
-      border: 1px solid #c5d0c8; background: #f4f7f5; padding: 0.65rem 0.75rem;
-      margin-bottom: 0.75rem; min-height: 2.5rem;
+    :root {{
+      color-scheme: light;
+      --bg: #f4f5f7; --surface: #ffffff; --text: #1a1d21; --muted: #5c6570;
+      --line: #e2e5ea; --accent: #126b5f; --accent-soft: #e6f3f0; --warn: #9a6700; --danger: #b42318;
+      font-family: 'IBM Plex Sans JP', sans-serif; color: var(--text); background: var(--bg);
     }}
-    #status.busy {{ border-color: #c9a227; background: #fff8e6; }}
-    #status.ok {{ border-color: #8bbb8b; background: #eef8ee; }}
-    #status.err {{ border-color: #c97a7a; background: #fbeeee; }}
-    .actions {{ display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }}
-    .actions select {{ max-width: 10rem; }}
+    * {{ box-sizing: border-box; }}
+    [hidden] {{ display: none !important; }}
+    body {{ margin: 0; min-width: 320px; }}
+    button, input, select {{ font: inherit; font-size: .875rem; border-radius: 6px; }}
+    button, select {{ cursor: pointer; }}
+    button {{ min-height: 40px; padding: .55rem .85rem; color: var(--text); border: 1px solid var(--line); background: var(--surface); }}
+    button:hover {{ border-color: var(--muted); background: var(--bg); }}
+    button:disabled, input:disabled, select:disabled {{ cursor: wait; opacity: .55; }}
+    button.primary {{ background: var(--accent); color: white; border-color: var(--accent); font-weight: 500; }}
+    button.primary:hover {{ background: #0d574d; }}
+    input, select {{ min-width: 0; min-height: 42px; padding: .6rem .75rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); }}
+    input::placeholder {{ color: var(--muted); opacity: 1; }}
+    :focus-visible {{ outline: 2px solid var(--accent); outline-offset: 3px; }}
+    a {{ color: inherit; text-decoration: none; }}
+    a:hover {{ text-decoration: underline; text-underline-offset: 4px; }}
+    h1, h2, p {{ margin: 0; }}
+    h1 {{ font-size: 1.45rem; font-weight: 600; letter-spacing: .025em; }}
+    h2 {{ font-size: 1.15rem; font-weight: 600; overflow-wrap: anywhere; }}
+    .muted {{ color: var(--muted); font-size: .8rem; line-height: 1.8; }}
+    .sr-only {{ position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }}
+    .skip-link {{ position: fixed; top: -80px; left: 16px; z-index: 30; padding: 12px; background: var(--surface); }}
+    .skip-link:focus {{ top: 12px; }}
+    .shell {{ width: min(1600px, calc(100% - 64px)); margin-inline: auto; }}
+    .header {{ position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }}
+    .masthead {{ display: flex; align-items: center; justify-content: space-between; gap: 40px; min-height: 86px; padding-block: 16px; }}
+    .brand {{ display: inline-flex; align-items: center; gap: 12px; flex-shrink: 0; font: 600 1.45rem 'Fraunces', 'IBM Plex Sans JP', serif; letter-spacing: -.045em; }}
+    .brand-mark {{ display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }}
+    .brand-mark svg {{ width: 23px; height: 23px; }}
+    .search-form {{ display: flex; flex: 0 1 740px; align-items: center; gap: 10px; padding: 5px 6px 5px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }}
+    .search-form:focus-within {{ border-color: var(--accent); }}
+    .search-icon {{ width: 19px; height: 19px; flex-shrink: 0; color: var(--muted); }}
+    #q {{ flex: 1; width: 100%; border: 0; padding: 7px 0; background: transparent; }}
+    #mediaType {{ max-width: 115px; min-height: 36px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; padding-inline: 10px; font-size: .8rem; }}
+    #go {{ min-width: 72px; }}
+    .page-heading {{ padding-block: 30px 23px; }}
+    .page-heading p {{ margin-top: 7px; }}
+    .view-bar {{ display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--line); }}
+    .view-switch {{ display: flex; gap: 28px; }}
+    .view-switch button {{ position: relative; border: 0; border-radius: 0; padding: 13px 2px 16px; font-weight: 500; color: var(--muted); background: transparent; }}
+    .view-switch button[aria-selected="true"] {{ color: var(--accent); }}
+    .view-switch button[aria-selected="true"]::after {{ content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background: var(--accent); border-radius: 2px 2px 0 0; }}
+    .status-line {{ display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: .75rem; color: var(--muted); }}
+    .status-line > span {{ white-space: nowrap; }}
+    #status {{ overflow-wrap: anywhere; }}
+    #status.ok {{ color: var(--accent); }}
+    #status.err {{ color: var(--danger); }}
+    #status.busy {{ color: var(--warn); }}
+    .import-banner {{ display: flex; align-items: center; gap: 14px; padding: 16px 20px; margin-top: 20px; border: 1px solid #e8d8b2; border-radius: 8px; color: var(--warn); background: #fff8e8; }}
+    .import-banner.ok {{ color: var(--accent); background: var(--accent-soft); border-color: #badbd3; }}
+    .import-banner.err {{ color: var(--danger); background: #fff0ee; border-color: #f0c8c3; }}
+    .import-dot {{ width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }}
+    .import-banner.busy .import-dot {{ animation: status-pulse 1.4s ease-in-out infinite; }}
+    .import-copy {{ flex: 1; min-width: 0; }}
+    .import-copy strong {{ display: block; font-size: .85rem; font-weight: 500; }}
+    #importStatus {{ margin-top: 3px; font-size: .8rem; overflow-wrap: anywhere; }}
+    #dismissImport {{ color: inherit; background: transparent; border-color: currentColor; }}
+    .view-panel {{ animation: view-in .16s ease-out; }}
+    .library-layout {{ display: grid; grid-template-columns: 228px minmax(0, 1fr); min-height: 520px; }}
+    .sidebar {{ padding: 28px 20px 32px 0; border-right: 1px solid var(--line); min-width: 0; }}
+    .section-label {{ font-size: .8rem; font-weight: 600; margin-bottom: 12px; }}
+    .here-card {{
+      display: grid; gap: 4px; padding: 12px 14px; margin-bottom: 16px;
+      border: 1px solid #badbd3; border-radius: 8px; background: var(--accent-soft);
+    }}
+    .here-label {{ font-size: .68rem; font-weight: 600; letter-spacing: .06em; color: var(--accent); }}
+    .here-name {{ font-size: .95rem; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }}
+    .crumb-nav {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px 2px; margin-bottom: 14px; }}
+    .crumb-nav button {{
+      border: 0; background: transparent; color: var(--accent); padding: 4px 6px;
+      min-height: 0; font-size: .78rem; font-weight: 500; text-decoration: underline;
+      text-underline-offset: 3px;
+    }}
+    .crumb-nav button:hover {{ background: var(--accent-soft); border-radius: 4px; }}
+    .crumb-nav button[aria-current="page"] {{
+      color: var(--text); text-decoration: none; font-weight: 600; cursor: default;
+    }}
+    .crumb-sep {{ color: var(--muted); font-size: .75rem; user-select: none; }}
+    .folder-list-label {{
+      font-size: .72rem; font-weight: 600; color: var(--muted);
+      letter-spacing: .04em; margin: 8px 0 8px; padding-left: 2px;
+    }}
+    .folder {{
+      display: flex; width: 100%; align-items: center; text-align: left; gap: 10px;
+      border: 1px solid transparent; padding: 10px 12px; margin-bottom: 4px;
+      background: transparent; overflow-wrap: anywhere; border-radius: 6px;
+    }}
+    .folder:hover {{ background: #eef1f4; border-color: var(--line); }}
+    .folder::before {{
+      content: ''; width: 16px; height: 13px; flex-shrink: 0;
+      background: #f0c56d; border: 1px solid #d4a84a; border-radius: 2px 2px 1px 1px;
+      box-shadow: inset 0 2px 0 #f7e0a8;
+    }}
+    .folder.has-children::after {{
+      content: '›'; margin-left: auto; color: var(--muted); font-size: 1.1rem; line-height: 1;
+    }}
+    .folder.active {{ color: var(--accent); background: var(--accent-soft); border-color: #badbd3; font-weight: 600; }}
+    #folders {{ margin-top: 0; }}
+    #folders > p {{ padding: 10px 12px; }}
+    .folder-create {{ display: grid; gap: 8px; padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--line); }}
+    .folder-create label {{ font-size: .75rem; color: var(--muted); }}
+    .folder-create input {{ width: 100%; }}
+    .folder-create button {{ text-align: left; color: var(--accent); }}
+    .workspace {{ min-width: 0; padding: 28px 0 40px 28px; }}
+    .collection-heading {{ display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }}
+    .collection-heading > div {{ min-width: 0; }}
+    #crumb {{ font-size: .95rem; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }}
+    #crumbPath {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }}
+    #crumbPath button {{
+      border: 0; background: transparent; color: var(--accent); padding: 2px 4px;
+      min-height: 0; font-size: .78rem; text-decoration: underline; text-underline-offset: 3px;
+    }}
+    #crumbPath button[aria-current="page"] {{ color: var(--muted); text-decoration: none; cursor: default; }}
+    #crumbPath .crumb-sep {{ color: var(--muted); font-size: .75rem; }}
+    .count {{ white-space: nowrap; font-variant-numeric: tabular-nums; }}
+    .upload-toolbar {{ display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }}
+    #upload {{ display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin-left: auto; }}
+    #upload svg {{ width: 18px; height: 18px; }}
+    .file-picker {{ position: relative; flex-shrink: 0; }}
+    .file-picker input {{ position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }}
+    .file-picker label {{ display: block; border: 1px solid var(--line); border-radius: 6px; padding: 11px 12px; font-size: .8rem; }}
+    .file-picker:hover label {{ border-color: var(--muted); }}
+    .file-picker:focus-within {{ outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }}
+    #fileName {{ flex: 1 1 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    #uploadProduct {{ max-width: 215px; }}
+    .upload-hint {{ margin: 9px 0 24px; font-size: .75rem; }}
+    .asset-grid {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }}
+    .asset-card {{ position: relative; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 2px rgb(0 0 0 / 6%); }}
+    .asset-card:focus-within {{ border-color: var(--accent); }}
+    .thumbnail {{ display: block; aspect-ratio: 1 / 1; background: #edf0f2; border-bottom: 1px solid var(--line); border-radius: 7px 7px 0 0; overflow: hidden; }}
+    .thumbnail img {{ display: block; width: 100%; height: 100%; object-fit: contain; color: var(--muted); font-size: .8rem; }}
+    .asset-info {{ padding: 14px; }}
+    .asset-name {{ font-size: .85rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .asset-caption {{ display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 8px; font-size: .7rem; color: var(--muted); line-height: 1.7; overflow-wrap: anywhere; }}
+    .type-badge {{ padding: 1px 6px; border-radius: 4px; background: var(--bg); }}
+    .card-menu {{ position: absolute; right: 9px; top: 9px; }}
+    .card-menu[open] {{ z-index: 5; }}
+    .card-menu summary {{ display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; list-style: none; font-size: 1.4rem; line-height: 1; }}
+    .card-menu summary::-webkit-details-marker {{ display: none; }}
+    .card-menu summary:hover {{ border-color: var(--accent); color: var(--accent); }}
+    .menu-content {{ position: absolute; right: 0; top: 40px; width: 190px; display: grid; gap: 5px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }}
+    .menu-content button {{ text-align: left; border: 0; }}
+    .menu-content label {{ color: var(--muted); font-size: .75rem; padding: 7px 8px 0; }}
+    .menu-content select {{ width: 100%; font-size: .8rem; }}
+    .menu-content .danger {{ color: var(--danger); border-top: 1px solid var(--line); border-radius: 0; margin-top: 3px; }}
+    .empty-state {{ grid-column: 1 / -1; display: grid; justify-items: center; align-content: center; min-height: 300px; padding: 36px 24px; border: 1px dashed #c9d0d8; border-radius: 8px; text-align: center; }}
+    .empty-mark {{ display: grid; place-items: center; width: 56px; height: 56px; border-radius: 12px; color: var(--accent); background: var(--accent-soft); margin-bottom: 20px; }}
+    .empty-mark svg {{ width: 28px; height: 28px; }}
+    .empty-state h3 {{ margin: 0 0 10px; font-size: 1.05rem; font-weight: 500; }}
+    .empty-state p {{ color: var(--muted); font-size: .8rem; line-height: 1.9; max-width: 440px; }}
+    .empty-state button {{ margin-top: 20px; }}
+    .standalone-panel {{ padding-block: 28px 40px; min-height: 520px; }}
+    .standalone-panel .collection-heading p {{ margin-top: 7px; }}
+    .product-form {{ display: flex; align-items: end; flex-wrap: wrap; gap: 16px; padding: 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); margin-bottom: 24px; }}
+    .product-field {{ display: grid; gap: 8px; flex: 1 1 220px; }}
+    .product-field label {{ font-size: .8rem; font-weight: 500; }}
+    .product-field input {{ width: 100%; }}
+    #addProduct {{ min-height: 43px; }}
+    .product-list {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }}
+    .product-row {{ position: relative; min-width: 0; padding: 22px 54px 22px 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / 6%); overflow-wrap: anywhere; }}
+    .product-row .product-name {{ display: block; font-size: .95rem; font-weight: 500; }}
+    .product-row .product-code {{ display: block; color: var(--muted); font-size: .75rem; margin-top: 8px; }}
+    footer {{ border-top: 1px solid var(--line); padding-block: 22px 28px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .7rem; }}
+    footer .debug {{ text-align: right; max-width: 100%; overflow-wrap: anywhere; }}
+    footer .mono {{ font-family: ui-monospace, monospace; }}
+    footer p {{ margin-top: 4px; }}
+    @media (max-width: 1250px) {{ .asset-grid {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} }}
+    @media (max-width: 1000px) {{
+      .shell {{ width: calc(100% - 40px); }}
+      .masthead {{ gap: 24px; }}
+      .library-layout {{ grid-template-columns: 190px minmax(0, 1fr); }}
+      .sidebar {{ padding-right: 16px; }}
+      .workspace {{ padding-left: 20px; }}
+      .asset-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }}
+      .product-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    }}
+    @media (max-width: 720px) {{
+      .shell {{ width: calc(100% - 32px); }}
+      .masthead {{ flex-wrap: wrap; gap: 12px; padding-block: 12px; }}
+      .brand {{ font-size: 1.25rem; }}
+      .brand-mark {{ width: 29px; height: 29px; }}
+      .search-form {{ flex-basis: 100%; gap: 6px; padding-left: 10px; }}
+      .search-icon {{ display: none; }}
+      #q, input, select {{ font-size: 16px; }}
+      #mediaType {{ width: 78px; padding-inline: 5px; font-size: .75rem; }}
+      #go {{ min-width: 54px; padding-inline: 10px; }}
+      .page-heading {{ padding-block: 24px 16px; }}
+      h1 {{ font-size: 1.25rem; }}
+      .view-bar {{ flex-wrap: wrap; gap: 0; }}
+      .view-switch {{ width: 100%; gap: 26px; }}
+      .status-line {{ padding-block: 12px; }}
+      .library-layout {{ grid-template-columns: 1fr; }}
+      .sidebar {{ padding: 20px 0; border-right: 0; border-bottom: 1px solid var(--line); }}
+      .section-label {{ margin-bottom: 10px; }}
+      .folder-nav, #folders {{ display: flex; flex-wrap: wrap; gap: 5px; }}
+      #folders {{ margin: 0; }}
+      .folder {{ width: auto; max-width: 100%; margin: 0; }}
+      #folders > p {{ padding: 8px; }}
+      .folder-create {{ grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 14px; padding-top: 14px; }}
+      .folder-create label {{ grid-column: 1 / -1; }}
+      .workspace {{ padding: 22px 0 32px; }}
+      .upload-toolbar {{ padding: 12px; gap: 10px; }}
+      #upload {{ flex: 1; }}
+      #uploadProduct {{ max-width: none; width: 50%; flex: 1; font-size: .8rem; }}
+      #fileName {{ flex-basis: 140px; }}
+      .asset-grid {{ gap: 12px; }}
+      .asset-info {{ padding: 11px; }}
+      .asset-name {{ font-size: .8rem; }}
+      .card-menu {{ right: 6px; top: 6px; }}
+      .card-menu summary {{ width: 40px; height: 40px; }}
+      .menu-content {{ top: 44px; width: min(190px, 42vw); }}
+      .menu-content button, .menu-content select {{ min-height: 44px; }}
+      .product-form {{ padding: 16px; }}
+      .product-list {{ grid-template-columns: 1fr; }}
+      .import-banner {{ padding: 14px; flex-wrap: wrap; }}
+      footer .debug {{ text-align: left; }}
+    }}
+    @keyframes view-in {{ from {{ opacity: .5; }} to {{ opacity: 1; }} }}
+    @keyframes status-pulse {{ 50% {{ opacity: .25; }} }}
+    @media (prefers-reduced-motion: reduce) {{ *, *::before {{ animation: none !important; }} }}
   </style>
 </head>
 <body>
-  <h1>media-search</h1>
-  <p class="muted">mode=<strong>{embedder_mode}</strong> · {embedder_id}</p>
-  {warn}
-  <div id="status" class="muted">待機中</div>
-  <div class="row">
-    <input id="q" size="36" placeholder="意味検索…" />
-    <select id="mediaType">
-      <option value="">any</option>
-      <option value="image">image</option>
-      <option value="video">video</option>
-    </select>
-    <button id="go">Search</button>
-  </div>
-  <div class="layout">
-    <div class="panel">
-      <div class="row">
-        <strong>Folders</strong>
-        <button id="rootBtn">/</button>
-      </div>
-      <div id="folders"></div>
-      <div class="row">
-        <input id="newFolder" size="12" placeholder="new folder" />
-        <button id="addFolder">Add</button>
-      </div>
+  <a class="skip-link" href="#workspace">メイン画面へ移動</a>
+  <header class="header">
+    <div class="masthead shell">
+      <a class="brand" href="/" aria-label="media-search ホーム"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m3 18 5-5 4 4 4-6 5 7"/></svg></span>media-search</a>
+      <form id="searchForm" class="search-form" role="search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
+        <label class="sr-only" for="q">キーワード・意味で検索</label>
+        <input id="q" type="search" placeholder="キーワード・意味で検索…" required autocomplete="off" />
+        <label class="sr-only" for="mediaType">素材の種類</label>
+        <select id="mediaType"><option value="">すべて</option><option value="image">画像</option><option value="video">動画</option></select>
+        <button id="go" class="primary" type="submit">検索</button>
+      </form>
     </div>
-    <div class="panel">
-      <div class="row">
-        <span id="crumb" class="muted">folder: (root)</span>
-        <select id="uploadProduct" title="Product (optional)">
-          <option value="">(no product)</option>
-        </select>
-        <input id="file" type="file" accept=".jpg,.jpeg,.png,.mp4" multiple />
-        <button id="upload">Upload</button>
-      </div>
-      <div class="row">
-        <strong>Products</strong>
-        <input id="newProductId" size="10" placeholder="SKU id" />
-        <input id="newProductName" size="14" placeholder="name" />
-        <button id="addProduct">Add product</button>
-      </div>
-      <div id="products" class="muted"></div>
-      <div id="assets"></div>
-      <div id="out"></div>
+  </header>
+  <main id="workspace" class="shell" tabindex="-1">
+    <div class="page-heading"><h1>メディアライブラリ</h1><p class="muted">画像・動画をまとめて管理。フォルダで整理し、言葉で検索。</p></div>
+    <div class="view-bar">
+      <nav class="view-switch" role="tablist" aria-label="表示の切り替え">
+        <button id="libraryTab" role="tab" aria-selected="true" aria-controls="libraryPanel">ライブラリ</button>
+        <button id="searchTab" role="tab" aria-selected="false" aria-controls="searchPanel" tabindex="-1">検索結果</button>
+        <button id="productsTab" role="tab" aria-selected="false" aria-controls="productsPanel" tabindex="-1">商品</button>
+      </nav>
+      <div class="status-line"><span>状態:</span><p id="status" role="status" aria-live="polite" aria-atomic="true">読み込み中…</p></div>
     </div>
-  </div>
+    <section id="importBanner" class="import-banner" role="status" aria-live="polite" aria-atomic="true" aria-label="取り込み状況" hidden>
+      <span class="import-dot" aria-hidden="true"></span><div class="import-copy"><strong>ファイルの取り込み</strong><p id="importStatus"></p></div>
+      <button id="dismissImport" type="button" hidden>閉じる</button>
+    </section>
+    <section id="libraryPanel" class="view-panel library-layout" role="tabpanel" aria-labelledby="libraryTab">
+      <aside class="sidebar" aria-label="フォルダの管理">
+        <h2 class="section-label">フォルダ</h2>
+        <div id="hereCard" class="here-card" aria-live="polite">
+          <span class="here-label">いま見ている場所</span>
+          <span id="hereName" class="here-name">ライブラリ直下</span>
+        </div>
+        <nav id="sideCrumb" class="crumb-nav" aria-label="フォルダのパンくず"></nav>
+        <p class="folder-list-label" id="folderListLabel">直下のフォルダ</p>
+        <nav class="folder-nav" aria-label="フォルダを選択">
+          <div id="folders"></div>
+        </nav>
+        <form id="folderForm" class="folder-create">
+          <label for="newFolder">現在の場所にフォルダを作成</label>
+          <input id="newFolder" placeholder="新しいフォルダ名" required />
+          <button id="addFolder" type="submit">＋ 新規フォルダ</button>
+        </form>
+      </aside>
+      <div class="workspace">
+        <div class="collection-heading">
+          <div>
+            <h2 id="crumb">ライブラリ直下</h2>
+            <nav id="crumbPath" aria-label="現在地のパス"></nav>
+          </div>
+          <span id="count" class="muted count"></span>
+        </div>
+        <div id="uploadToolbar" class="upload-toolbar" role="group" aria-label="現在のフォルダに素材を追加">
+          <div class="file-picker"><label for="file">ファイルを選択</label><input id="file" type="file" accept=".jpg,.jpeg,.png,.mp4" multiple aria-describedby="fileName uploadHint" /></div>
+          <span id="fileName" class="muted">未選択</span>
+          <label class="sr-only" for="uploadProduct">紐づける商品（任意）</label>
+          <select id="uploadProduct"><option value="">商品を選ぶ（任意）</option></select>
+          <button id="upload" class="primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/></svg>アップロード</button>
+        </div>
+        <p id="uploadHint" class="muted upload-hint">JPG・PNG・MP4 ／ 複数選択できます。商品を紐づけて、現在のフォルダにアップロード。</p>
+        <div id="assets" class="asset-grid" aria-label="ライブラリの素材" aria-busy="true"></div>
+      </div>
+    </section>
+    <section id="searchPanel" class="view-panel standalone-panel" role="tabpanel" aria-labelledby="searchTab" hidden>
+      <div class="collection-heading"><div><h2 id="searchHeading">検索結果</h2><p class="muted">ライブラリ全体から、入力した言葉に近い素材を表示します。</p></div><span id="searchCount" class="muted count"></span></div>
+      <div id="out" class="asset-grid" aria-label="検索結果"></div>
+    </section>
+    <section id="productsPanel" class="view-panel standalone-panel" role="tabpanel" aria-labelledby="productsTab" hidden>
+      <div class="collection-heading"><div><h2>商品</h2><p class="muted">素材に紐づける商品を管理します。登録した商品はアップロード時に選べます。</p></div><span id="productCount" class="muted count"></span></div>
+      <form id="productForm" class="product-form">
+        <div class="product-field"><label for="newProductId">商品コード（SKU）</label><input id="newProductId" placeholder="例：BAG-001" required /></div>
+        <div class="product-field"><label for="newProductName">商品名</label><input id="newProductName" placeholder="例：キャンバストート" required /></div>
+        <button id="addProduct" class="primary" type="submit">＋ 商品を登録</button>
+      </form>
+      <div id="products" class="product-list" aria-label="登録済みの商品"></div>
+    </section>
+  </main>
+  <footer class="shell">
+    <span>media-search <span aria-hidden="true">／</span> メディアライブラリ</span>
+    <div class="debug"><span class="mono">mode={escape(embedder_mode)} · {escape(embedder_id)}</span>{warn}</div>
+  </footer>
   <script>
     let currentFolder = null;
     let folderCache = [];
     let productCache = [];
     let busy = false;
+    let activeView = 'library';
+    let assetCount = 0;
+    let resultCount = null;
+    let lastQuery = '';
+    let assetRequest = 0;
+    let searchRequest = 0;
     const foldersEl = document.getElementById('folders');
     const assetsEl = document.getElementById('assets');
     const productsEl = document.getElementById('products');
     const out = document.getElementById('out');
     const statusEl = document.getElementById('status');
     const crumb = document.getElementById('crumb');
+    const hereName = document.getElementById('hereName');
+    const sideCrumb = document.getElementById('sideCrumb');
+    const crumbPath = document.getElementById('crumbPath');
+    const folderListLabel = document.getElementById('folderListLabel');
     const uploadBtn = document.getElementById('upload');
     const uploadProduct = document.getElementById('uploadProduct');
+    const fileInput = document.getElementById('file');
+    const views = ['library', 'search', 'products'];
 
-    function setStatus(msg, kind) {{
-      statusEl.textContent = msg;
-      statusEl.className = kind || 'muted';
+    // API names and IDs are data, including when used in HTML attributes.
+    function esc(value) {{
+      return String(value ?? '').replace(/[&<>"']/g, c => ({{'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}}[c]));
     }}
-
+    function setStatus(msg, kind = '') {{
+      statusEl.textContent = msg;
+      statusEl.className = kind;
+    }}
+    function setImportStatus(msg, kind) {{
+      const banner = document.getElementById('importBanner');
+      banner.hidden = false;
+      banner.className = 'import-banner ' + kind;
+      document.getElementById('importStatus').textContent = msg;
+      document.getElementById('dismissImport').hidden = kind === 'busy';
+      setStatus(kind === 'busy' ? '取り込み中' : (kind === 'err' ? '取り込みに失敗' : '取り込み完了'), kind);
+    }}
+    async function requestJson(url, options) {{
+      const res = await fetch(url, options);
+      if (!res.ok) {{
+        let detail = '';
+        try {{
+          const body = await res.json();
+          if (typeof body.detail === 'string') detail = body.detail;
+        }} catch (_) {{ /* Non-JSON failures still report their HTTP status. */ }}
+        throw new Error(`操作に失敗しました（${{res.status}}）${{detail ? '：' + detail : '。もう一度お試しください。'}}`);
+      }}
+      return res.status === 204 ? null : res.json();
+    }}
+    async function runAction(action) {{
+      try {{ await action(); }}
+      catch (error) {{
+        setStatus(error instanceof TypeError ? '通信できませんでした。接続を確認して、もう一度お試しください。' : error.message, 'err');
+      }}
+    }}
+    function emptyState(title, message, action = '', label = '') {{
+      return `<div class="empty-state"><span class="empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m3 18 5-5 4 4 4-6 5 7"/></svg></span><h3>${{esc(title)}}</h3><p>${{esc(message)}}</p>${{action ? `<button class="primary" data-empty-action="${{esc(action)}}">${{esc(label)}}</button>` : ''}}</div>`;
+    }}
+    function folderTrail() {{
+      const trail = [{{ id: null, name: 'ライブラリ直下' }}];
+      const visited = new Set();
+      let id = currentFolder;
+      const stack = [];
+      while (id && !visited.has(id)) {{
+        visited.add(id);
+        const folder = folderCache.find(f => f.folder_id === id);
+        if (!folder) break;
+        stack.unshift({{ id: folder.folder_id, name: folder.name }});
+        id = folder.parent_id;
+      }}
+      return trail.concat(stack);
+    }}
+    function currentFolderName() {{
+      if (!currentFolder) return 'ライブラリ直下';
+      return folderCache.find(f => f.folder_id === currentFolder)?.name || 'フォルダ';
+    }}
+    function renderCrumbNav(el, trail) {{
+      el.innerHTML = trail.map((seg, i) => {{
+        const last = i === trail.length - 1;
+        const btn = `<button type="button" data-crumb="${{seg.id == null ? '' : esc(seg.id)}}" ${{last ? 'aria-current="page"' : ''}}>${{esc(seg.name)}}</button>`;
+        return i === 0 ? btn : `<span class="crumb-sep" aria-hidden="true">/</span>${{btn}}`;
+      }}).join('');
+      el.querySelectorAll('button[data-crumb]').forEach(btn => {{
+        if (btn.getAttribute('aria-current') === 'page') return;
+        btn.onclick = () => runAction(async () => {{
+          currentFolder = btn.dataset.crumb || null;
+          await refreshAll();
+        }});
+      }});
+    }}
+    function updateLocationChrome() {{
+      const trail = folderTrail();
+      const name = currentFolderName();
+      hereName.textContent = name;
+      crumb.textContent = name;
+      renderCrumbNav(sideCrumb, trail);
+      renderCrumbNav(crumbPath, trail);
+      folderListLabel.textContent = currentFolder ? 'このフォルダの中' : '直下のフォルダ';
+    }}
+    function setView(view) {{
+      activeView = view;
+      views.forEach(name => {{
+        const selected = name === view;
+        document.getElementById(name + 'Panel').hidden = !selected;
+        const tab = document.getElementById(name + 'Tab');
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      }});
+      updateLocationChrome();
+      document.getElementById('count').textContent = `${{assetCount}} 点`;
+      document.getElementById('searchHeading').textContent = lastQuery ? `「${{lastQuery}}」の検索結果` : '検索結果';
+      document.getElementById('searchCount').textContent = resultCount === null ? '' : `${{resultCount}} 件 · 関連度順`;
+      document.getElementById('productCount').textContent = `${{productCache.length}} 件`;
+    }}
+    function updateFileLabel() {{
+      const files = Array.from(fileInput.files || []);
+      document.getElementById('fileName').textContent = files.length === 1 ? files[0].name : (files.length ? `${{files.length}} 件を選択中` : '未選択');
+    }}
     async function pollJob(id) {{
       for (;;) {{
-        const res = await fetch('/api/import/jobs/' + encodeURIComponent(id));
-        const body = await res.json();
-        if (!res.ok) {{
-          setStatus('Import 状態取得失敗: ' + JSON.stringify(body), 'err');
-          return body;
-        }}
-        const p = body.processed != null && body.total != null
-          ? ` ${{body.processed}}/${{body.total}}` : '';
-        const label = body.status === 'queued' ? 'キュー待ち'
-          : body.status === 'running' ? 'インデックス処理中'
-          : body.status === 'succeeded' ? '完了'
-          : body.status === 'failed' ? '失敗'
-          : body.status;
-        setStatus(`Import: ${{label}}${{p}}` + (body.error ? ' — ' + body.error : ''),
-          body.status === 'failed' ? 'err'
-            : (body.status === 'succeeded' ? 'ok' : 'busy'));
+        const body = await requestJson('/api/import/jobs/' + encodeURIComponent(id));
+        const progress = body.processed != null && body.total != null ? ` ${{body.processed}}/${{body.total}}` : '';
+        const label = {{queued: '開始を待っています', running: '検索用データを作成中', succeeded: '完了しました', failed: '失敗しました'}}[body.status] || '処理中';
+        setImportStatus(`取り込み：${{label}}${{progress}}` + (body.error ? ' — ' + body.error : ''),
+          body.status === 'failed' ? 'err' : (body.status === 'succeeded' ? 'ok' : 'busy'));
         if (body.status === 'succeeded' || body.status === 'failed') {{
           await refreshAssets();
           return body;
         }}
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(resolve => setTimeout(resolve, 800));
       }}
     }}
-
     async function loadAllFolders() {{
-      const res = await fetch('/api/library/folders?all=1');
-      const body = await res.json();
+      const body = await requestJson('/api/library/folders?all=1');
       folderCache = body.folders || [];
-      return folderCache;
     }}
-
     function folderOptionsHtml(selected) {{
-      const opts = ['<option value="">(root)</option>']
-        .concat(folderCache.map(f =>
-          `<option value="${{f.folder_id}}" ${{f.folder_id === selected ? 'selected' : ''}}>${{f.name}}</option>`
-        ));
-      return opts.join('');
+      return '<option value="">ライブラリ直下</option>' + folderCache.map(f =>
+        `<option value="${{esc(f.folder_id)}}" ${{f.folder_id === selected ? 'selected' : ''}}>${{esc(f.name)}}</option>`
+      ).join('');
     }}
-
     async function refreshFolders() {{
+      const folder = currentFolder;
       const params = new URLSearchParams();
-      if (currentFolder) params.set('parent_id', currentFolder);
-      const res = await fetch('/api/library/folders?' + params.toString());
-      const body = await res.json();
-      foldersEl.innerHTML = (body.folders || []).map(f =>
-        `<a class="folder" data-id="${{f.folder_id}}">${{f.name}}</a>`
-      ).join('') || '<p class="muted">no subfolders</p>';
+      if (folder) params.set('parent_id', folder);
+      const body = await requestJson('/api/library/folders?' + params.toString());
+      if (folder !== currentFolder) return;
+      updateLocationChrome();
+      const children = body.folders || [];
+      const hasGrandchildren = id => folderCache.some(f => f.parent_id === id);
+      foldersEl.innerHTML = children.map(f =>
+        `<button type="button" class="folder${{hasGrandchildren(f.folder_id) ? ' has-children' : ''}}" data-id="${{esc(f.folder_id)}}">${{esc(f.name)}}</button>`
+      ).join('') || '<p class="muted">下のフォルダはありません。必要なら新規作成できます。</p>';
       foldersEl.querySelectorAll('.folder').forEach(el => {{
-        el.onclick = () => {{ currentFolder = el.dataset.id; refreshAll(); }};
+        el.onclick = () => runAction(async () => {{ currentFolder = el.dataset.id; await refreshAll(); }});
       }});
     }}
-
+    function assetCard(asset, search = false) {{
+      const name = asset.display_name || asset.asset_id;
+      const url = '/api/assets/' + encodeURIComponent(asset.asset_id);
+      const product = productCache.find(p => p.product_id === asset.product_id);
+      const productLabel = product ? product.name : asset.product_id;
+      return `<article class="asset-card">
+        <a class="thumbnail" href="${{esc(url)}}" tabindex="-1" aria-hidden="true"><img src="${{esc(asset.thumbnail_url)}}" alt="" loading="lazy" /></a>
+        <div class="asset-info">
+          <div class="asset-name"><a href="${{esc(url)}}" title="${{esc(name)}}">${{esc(name)}}</a></div>
+          <p class="asset-caption"><span class="type-badge">${{asset.media_type === 'video' ? '動画' : '画像'}}</span>${{asset.product_id ? `<span data-product-caption="${{esc(asset.product_id)}}">${{esc(productLabel)}}</span>` : ''}}${{search ? '<span>関連度 ' + Number(asset.score).toFixed(4) + '</span>' : ''}}</p>
+        </div>
+        ${{search ? '' : `<details class="card-menu"><summary aria-label="${{esc(name)}}の操作">⋯</summary><div class="menu-content">
+          <button data-ren="${{esc(asset.asset_id)}}" aria-label="${{esc(name)}}の名前を変更">名前変更</button>
+          <label>フォルダへ移動<select data-mov="${{esc(asset.asset_id)}}" aria-label="${{esc(name)}}の移動先">${{folderOptionsHtml(asset.folder_id || '')}}</select></label>
+          <button class="danger" data-del="${{esc(asset.asset_id)}}" aria-label="${{esc(name)}}を削除">削除</button>
+        </div></details>`}}
+      </article>`;
+    }}
     async function refreshAssets() {{
-      const params = new URLSearchParams();
-      if (currentFolder) params.set('folder_id', currentFolder);
-      else params.set('folder_id', '');
-      const res = await fetch('/api/library/assets?' + params.toString());
-      const body = await res.json();
-      assetsEl.innerHTML = (body.assets || []).map(a => `
-        <div class="hit">
-          <img src="${{a.thumbnail_url}}" alt="" />
-          <div>
-            <div><a href="/api/assets/${{encodeURI(a.asset_id)}}">${{a.display_name || a.asset_id}}</a></div>
-            <div class="muted">${{a.media_type}} · ${{a.product_id ? ('SKU ' + a.product_id + ' · ') : ''}}<code>${{a.asset_id}}</code></div>
-          </div>
-          <div class="actions">
-            <button data-ren="${{a.asset_id}}">Rename</button>
-            <select data-mov="${{a.asset_id}}" title="Move to folder">
-              ${{folderOptionsHtml(a.folder_id || '')}}
-            </select>
-            <button data-del="${{a.asset_id}}">Delete</button>
-          </div>
-        </div>`).join('') || '<p class="muted">empty folder</p>';
+      const request = ++assetRequest;
+      const params = new URLSearchParams({{folder_id: currentFolder || ''}});
+      const body = await requestJson('/api/library/assets?' + params.toString());
+      if (request !== assetRequest) return;
+      const assets = body.assets || [];
+      assetCount = assets.length;
+      assetsEl.innerHTML = assets.map(a => assetCard(a)).join('') ||
+        emptyState('まだ画像がありません', 'ファイルを選択して「アップロード」を押してください。取り込みが完了すると、画像や動画を言葉で検索できます。', 'upload', '＋ ファイルを選んで追加');
+      assetsEl.removeAttribute('aria-busy');
+      setView(activeView);
       assetsEl.querySelectorAll('[data-del]').forEach(btn => {{
-        btn.onclick = async () => {{
-          if (!confirm('Delete?')) return;
+        btn.onclick = () => runAction(async () => {{
+          if (!confirm('この素材を削除しますか？この操作は取り消せません。')) return;
           setStatus('削除中…', 'busy');
-          await fetch('/api/library/assets/' + encodeURIComponent(btn.dataset.del), {{ method: 'DELETE' }});
-          setStatus('削除しました', 'ok');
-          refreshAssets();
-        }};
+          await requestJson('/api/library/assets/' + encodeURIComponent(btn.dataset.del), {{method: 'DELETE'}});
+          setStatus('素材を削除しました', 'ok');
+          await refreshAssets();
+        }});
       }});
       assetsEl.querySelectorAll('[data-ren]').forEach(btn => {{
-        btn.onclick = async () => {{
-          const name = prompt('New name');
-          if (!name) return;
-          setStatus('リネーム中…', 'busy');
-          await fetch('/api/library/assets/' + encodeURIComponent(btn.dataset.ren), {{
-            method: 'PATCH', headers: {{'Content-Type':'application/json'}},
-            body: JSON.stringify({{ display_name: name }})
+        btn.onclick = () => runAction(async () => {{
+          const asset = assets.find(a => a.asset_id === btn.dataset.ren);
+          const name = prompt('新しい素材名', asset.display_name || asset.asset_id);
+          if (!name || !name.trim()) return;
+          setStatus('名前を変更中…', 'busy');
+          await requestJson('/api/library/assets/' + encodeURIComponent(btn.dataset.ren), {{
+            method: 'PATCH', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{display_name: name}})
           }});
-          setStatus('リネームしました', 'ok');
-          refreshAssets();
-        }};
+          setStatus('素材名を変更しました', 'ok');
+          await refreshAssets();
+        }});
       }});
       assetsEl.querySelectorAll('select[data-mov]').forEach(sel => {{
-        sel.onchange = async () => {{
-          const fid = sel.value || null;
+        sel.onchange = () => runAction(async () => {{
+          const asset = assets.find(a => a.asset_id === sel.dataset.mov);
           setStatus('移動中…', 'busy');
-          const res = await fetch('/api/library/assets/' + encodeURIComponent(sel.dataset.mov), {{
-            method: 'PATCH', headers: {{'Content-Type':'application/json'}},
-            body: JSON.stringify({{ folder_id: fid }})
-          }});
-          if (!res.ok) {{
-            setStatus('移動失敗: ' + await res.text(), 'err');
-            return;
-          }}
-          setStatus('移動しました', 'ok');
-          refreshAssets();
-        }};
+          try {{
+            await requestJson('/api/library/assets/' + encodeURIComponent(sel.dataset.mov), {{
+              method: 'PATCH', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{folder_id: sel.value || null}})
+            }});
+          }} catch (error) {{ sel.value = asset.folder_id || ''; throw error; }}
+          setStatus('素材を移動しました', 'ok');
+          await refreshAssets();
+        }});
       }});
     }}
-
     async function refreshProducts() {{
-      const res = await fetch('/api/library/products');
-      const body = await res.json();
+      const body = await requestJson('/api/library/products');
       productCache = body.products || [];
-      uploadProduct.innerHTML = '<option value="">(no product)</option>' +
-        productCache.map(p =>
-          `<option value="${{p.product_id}}">${{p.name}} (${{p.product_id}})</option>`
-        ).join('');
+      document.querySelectorAll('[data-product-caption]').forEach(caption => {{
+        const id = caption.dataset.productCaption;
+        caption.textContent = productCache.find(p => p.product_id === id)?.name || id;
+      }});
+      const selected = uploadProduct.value;
+      uploadProduct.innerHTML = '<option value="">商品を選ぶ（任意）</option>' + productCache.map(p =>
+        `<option value="${{esc(p.product_id)}}">${{esc(p.name)}} (${{esc(p.product_id)}})</option>`
+      ).join('');
+      uploadProduct.value = productCache.some(p => p.product_id === selected) ? selected : '';
       productsEl.innerHTML = productCache.map(p =>
-        `<div class="row"><code>${{p.product_id}}</code> ${{p.name}}
-          <button data-pname="${{p.product_id}}">Rename</button>
-          <button data-pdel="${{p.product_id}}">Delete</button></div>`
-      ).join('') || '<p class="muted">no products yet</p>';
+        `<article class="product-row"><span class="product-name">${{esc(p.name)}}</span><span class="product-code">商品コード：${{esc(p.product_id)}}</span>
+          <details class="card-menu"><summary aria-label="${{esc(p.name)}}の商品操作">⋯</summary><div class="menu-content"><button data-pname="${{esc(p.product_id)}}" aria-label="${{esc(p.name)}}の商品名を変更">名前変更</button>
+          <button class="danger" data-pdel="${{esc(p.product_id)}}" aria-label="${{esc(p.name)}}を削除">削除</button></div></details></article>`
+      ).join('') || emptyState('商品がまだ登録されていません', '商品コードと商品名を登録しましょう。ライブラリでアップロードする際に、素材と紐づけられます。', 'product', '最初の商品を登録');
+      setView(activeView);
       productsEl.querySelectorAll('[data-pname]').forEach(btn => {{
-        btn.onclick = async () => {{
-          const name = prompt('New product name');
-          if (!name) return;
-          const res = await fetch('/api/library/products/' + encodeURIComponent(btn.dataset.pname), {{
-            method: 'PATCH', headers: {{'Content-Type':'application/json'}},
-            body: JSON.stringify({{ name }})
+        btn.onclick = () => runAction(async () => {{
+          const product = productCache.find(p => p.product_id === btn.dataset.pname);
+          const name = prompt('新しい商品名', product.name);
+          if (!name || !name.trim()) return;
+          await requestJson('/api/library/products/' + encodeURIComponent(btn.dataset.pname), {{
+            method: 'PATCH', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{name}})
           }});
-          if (!res.ok) {{ setStatus('商品名変更失敗: ' + await res.text(), 'err'); return; }}
           setStatus('商品名を更新しました', 'ok');
-          refreshProducts();
-        }};
+          await refreshProducts();
+        }});
       }});
       productsEl.querySelectorAll('[data-pdel]').forEach(btn => {{
-        btn.onclick = async () => {{
-          if (!confirm('Delete product?')) return;
-          const res = await fetch('/api/library/products/' + encodeURIComponent(btn.dataset.pdel), {{
-            method: 'DELETE'
-          }});
-          if (!res.ok) {{ setStatus('商品削除失敗: ' + await res.text(), 'err'); return; }}
+        btn.onclick = () => runAction(async () => {{
+          if (!confirm('この商品を削除しますか？')) return;
+          await requestJson('/api/library/products/' + encodeURIComponent(btn.dataset.pdel), {{method: 'DELETE'}});
           setStatus('商品を削除しました', 'ok');
-          refreshProducts();
-        }};
+          await refreshProducts();
+        }});
       }});
     }}
-
     async function refreshAll() {{
-      crumb.textContent = 'folder: ' + (currentFolder || '(root)');
+      setView('library');
       await loadAllFolders();
       await refreshFolders();
       await refreshProducts();
       await refreshAssets();
-      out.innerHTML = '';
     }}
-
-    document.getElementById('rootBtn').onclick = () => {{ currentFolder = null; refreshAll(); }};
-    document.getElementById('addFolder').onclick = async () => {{
-      const name = document.getElementById('newFolder').value.trim();
-      if (!name) return;
-      await fetch('/api/library/folders', {{
-        method: 'POST', headers: {{'Content-Type':'application/json'}},
-        body: JSON.stringify({{ name, parent_id: currentFolder }})
+    views.forEach((view, index) => {{
+      const tab = document.getElementById(view + 'Tab');
+      tab.onclick = () => setView(view);
+      tab.onkeydown = event => {{
+        let next;
+        if (event.key === 'ArrowRight') next = (index + 1) % views.length;
+        else if (event.key === 'ArrowLeft') next = (index + views.length - 1) % views.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = views.length - 1;
+        else return;
+        event.preventDefault();
+        setView(views[next]);
+        document.getElementById(views[next] + 'Tab').focus();
+      }};
+    }});
+    document.getElementById('dismissImport').onclick = () => {{ document.getElementById('importBanner').hidden = true; }};
+    document.addEventListener('click', event => {{
+      document.querySelectorAll('.card-menu[open]').forEach(menu => {{
+        if (!menu.contains(event.target)) menu.open = false;
       }});
-      document.getElementById('newFolder').value = '';
-      await loadAllFolders();
-      refreshFolders();
-    }};
-    document.getElementById('addProduct').onclick = async () => {{
-      const product_id = document.getElementById('newProductId').value.trim();
-      const name = document.getElementById('newProductName').value.trim();
-      if (!product_id || !name) {{
-        setStatus('product_id と name を入力してください', 'err');
-        return;
-      }}
-      const res = await fetch('/api/library/products', {{
-        method: 'POST', headers: {{'Content-Type':'application/json'}},
-        body: JSON.stringify({{ product_id, name }})
+      const action = event.target.closest('[data-empty-action]')?.dataset.emptyAction;
+      if (action === 'upload') {{
+        setView('library');
+        if (!busy) {{ fileInput.focus(); fileInput.click(); }}
+      }} else if (action === 'search') document.getElementById('q').focus();
+      else if (action === 'product') document.getElementById('newProductId').focus();
+    }});
+    document.addEventListener('keydown', event => {{
+      if (event.key !== 'Escape') return;
+      document.querySelectorAll('.card-menu[open]').forEach(menu => {{
+        if (menu.contains(document.activeElement)) menu.querySelector('summary').focus();
+        menu.open = false;
       }});
-      if (!res.ok) {{ setStatus('商品追加失敗: ' + await res.text(), 'err'); return; }}
-      document.getElementById('newProductId').value = '';
-      document.getElementById('newProductName').value = '';
-      setStatus('商品を追加しました', 'ok');
-      refreshProducts();
+    }});
+    fileInput.onchange = updateFileLabel;
+    document.getElementById('folderForm').onsubmit = event => {{
+      event.preventDefault();
+      runAction(async () => {{
+        const input = document.getElementById('newFolder');
+        const name = input.value.trim();
+        if (!name) return;
+        await requestJson('/api/library/folders', {{
+          method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{name, parent_id: currentFolder}})
+        }});
+        input.value = '';
+        setStatus('フォルダを作成しました', 'ok');
+        await loadAllFolders();
+        await refreshFolders();
+        await refreshAssets();
+      }});
     }};
-    uploadBtn.onclick = async () => {{
-      const input = document.getElementById('file');
-      const files = Array.from(input.files || []);
-      if (!files.length) {{
-        setStatus('ファイルを選んでください', 'err');
-        return;
-      }}
+    document.getElementById('productForm').onsubmit = event => {{
+      event.preventDefault();
+      runAction(async () => {{
+        const product_id = document.getElementById('newProductId').value.trim();
+        const name = document.getElementById('newProductName').value.trim();
+        if (!product_id || !name) {{ setStatus('商品コードと商品名を入力してください', 'err'); return; }}
+        await requestJson('/api/library/products', {{
+          method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{product_id, name}})
+        }});
+        document.getElementById('newProductId').value = '';
+        document.getElementById('newProductName').value = '';
+        setStatus('商品を追加しました', 'ok');
+        await refreshProducts();
+      }});
+    }};
+    uploadBtn.onclick = () => runAction(async () => {{
+      const files = Array.from(fileInput.files || []);
+      if (!files.length) {{ setStatus('アップロードするファイルを選んでください', 'err'); fileInput.focus(); return; }}
       if (busy) return;
       busy = true;
       uploadBtn.disabled = true;
+      fileInput.disabled = true;
+      uploadProduct.disabled = true;
       try {{
-        setStatus(`アップロード中 0/${{files.length}}…`, 'busy');
+        setImportStatus(`${{files.length}} 件のファイルをアップロード中…`, 'busy');
         const fd = new FormData();
         files.forEach(f => fd.append('files', f));
         if (currentFolder) fd.append('folder_id', currentFolder);
         if (uploadProduct.value) fd.append('product_id', uploadProduct.value);
-        const res = await fetch('/api/library/upload', {{ method: 'POST', body: fd }});
-        const body = await res.json();
-        if (!res.ok) {{
-          setStatus('アップロード失敗: ' + JSON.stringify(body), 'err');
-          return;
-        }}
+        const body = await requestJson('/api/library/upload', {{method: 'POST', body: fd}});
         const n = (body.assets || []).length || (body.asset ? 1 : 0);
-        setStatus(`${{n}} 件アップロード完了。インデックス開始…`, 'busy');
-        input.value = '';
+        setImportStatus(`${{n}} 件アップロード完了。検索用データを作成します…`, 'busy');
+        fileInput.value = '';
+        updateFileLabel();
         await refreshAssets();
-        const job = body.job;
-        if (job && job.job_id) {{
-          await pollJob(job.job_id);
-        }} else {{
-          setStatus(`${{n}} 件アップロード完了（Import ジョブなし）`, 'ok');
-        }}
+        if (body.job && body.job.job_id) await pollJob(body.job.job_id);
+        else setImportStatus(`${{n}} 件アップロード完了`, 'ok');
+      }} catch (error) {{
+        setImportStatus(error instanceof TypeError ? '通信できませんでした。接続を確認して再度お試しください。' : error.message, 'err');
+        throw error;
       }} finally {{
         busy = false;
         uploadBtn.disabled = false;
+        fileInput.disabled = false;
+        uploadProduct.disabled = false;
       }}
+    }});
+    document.getElementById('searchForm').onsubmit = event => {{
+      event.preventDefault();
+      runAction(async () => {{
+        const q = document.getElementById('q').value.trim();
+        if (!q) return;
+        const request = ++searchRequest;
+        const mediaType = document.getElementById('mediaType').value;
+        const params = new URLSearchParams({{q}});
+        if (mediaType) params.set('media_type', mediaType);
+        lastQuery = q;
+        resultCount = null;
+        out.innerHTML = emptyState('素材を探しています…', '言葉に近い写真や動画を探しています。');
+        setView('search');
+        setStatus('検索中…', 'busy');
+        out.setAttribute('aria-busy', 'true');
+        try {{
+          const body = await requestJson('/api/search?' + params.toString());
+          if (request !== searchRequest) return;
+          const hits = body.results || [];
+          resultCount = hits.length;
+          out.innerHTML = hits.map(r => assetCard(r, true)).join('') ||
+            emptyState('一致する素材がありません', '別の言葉で検索するか、素材の種類を「すべて」にしてお試しください。', 'search', '検索条件を変更');
+          setView(activeView);
+          setStatus(`検索結果 ${{hits.length}} 件`, 'ok');
+        }} catch (error) {{
+          if (request !== searchRequest) return;
+          out.innerHTML = emptyState('検索できませんでした', '接続や検索条件を確認して、もう一度検索してください。', 'search', '検索欄へ戻る');
+          throw error;
+        }} finally {{
+          if (request === searchRequest) out.removeAttribute('aria-busy');
+        }}
+      }});
     }};
-    document.getElementById('go').onclick = async () => {{
-      const q = document.getElementById('q').value;
-      const mediaType = document.getElementById('mediaType').value;
-      const params = new URLSearchParams({{ q }});
-      if (mediaType) params.set('media_type', mediaType);
-      setStatus('検索中…', 'busy');
-      const res = await fetch('/api/search?' + params.toString());
-      const body = await res.json();
-      if (!res.ok) {{
-        setStatus('検索失敗', 'err');
-        out.textContent = JSON.stringify(body);
-        return;
-      }}
-      const hits = body.results || [];
-      setStatus(`検索結果 ${{hits.length}} 件`, 'ok');
-      out.innerHTML = '<h3>Search</h3>' + (hits.map(r => `
-        <div class="hit">
-          <img src="${{r.thumbnail_url}}" alt="" />
-          <div>
-            <div><a href="/api/assets/${{encodeURI(r.asset_id)}}">${{r.display_name || r.asset_id}}</a></div>
-            <div class="muted">${{r.media_type}} · score ${{r.score.toFixed(4)}}</div>
-          </div>
-          <div></div>
-        </div>`).join('') || '<p class="muted">no results</p>');
-    }};
-    refreshAll();
+    out.innerHTML = emptyState('言葉で素材を探しましょう', '上の検索欄に「海辺の風景」「赤いバッグ」などの言葉を入力してください。ここに検索結果が表示されます。', 'search', '検索欄に入力');
+    assetsEl.innerHTML = emptyState('ライブラリを読み込み中…', '画像・動画とフォルダを取得しています。');
+    runAction(async () => {{
+      try {{
+        await refreshAll();
+        if (!statusEl.className) setStatus('待機中');
+      }} catch (error) {{
+        assetsEl.innerHTML = emptyState('ライブラリを読み込めませんでした', '接続を確認して、ページを再読み込みしてください。');
+        throw error;
+      }} finally {{ assetsEl.removeAttribute('aria-busy'); }}
+    }});
   </script>
 </body>
 </html>
