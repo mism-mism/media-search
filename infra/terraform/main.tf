@@ -55,10 +55,29 @@ variable "iap_members" {
   default     = []
 }
 
+variable "billing_account" {
+  type        = string
+  description = "Billing account id (e.g. 01XXXX-XXXXXX-XXXXXX). Empty = skip budget."
+  default     = ""
+}
+
+variable "monthly_budget_usd" {
+  type        = number
+  description = "Monthly project budget in USD (alert-only; does not hard-stop spend)."
+  default     = 50
+}
+
+variable "budget_alert_email" {
+  type        = string
+  description = "Email for budget threshold alerts."
+  default     = ""
+}
+
 locals {
-  iap_mode     = !var.allow_unauthenticated
-  deploy_run   = var.image != ""
-  iap_sa_email = "service-${data.google_project.current.number}@gcp-sa-iap.iam.gserviceaccount.com"
+  iap_mode       = !var.allow_unauthenticated
+  deploy_run     = var.image != ""
+  iap_sa_email   = "service-${data.google_project.current.number}@gcp-sa-iap.iam.gserviceaccount.com"
+  enable_budget  = var.billing_account != "" && var.budget_alert_email != ""
 }
 
 resource "google_project_service" "services" {
@@ -67,6 +86,8 @@ resource "google_project_service" "services" {
     "artifactregistry.googleapis.com",
     "storage.googleapis.com",
     "iam.googleapis.com",
+    "monitoring.googleapis.com",
+    local.enable_budget ? "billingbudgets.googleapis.com" : "",
     local.iap_mode ? "iap.googleapis.com" : "",
   ]))
   service            = each.value
@@ -369,4 +390,61 @@ output "allow_unauthenticated" {
 
 output "iap_mode" {
   value = local.iap_mode
+}
+
+output "monthly_budget_usd" {
+  value = local.enable_budget ? var.monthly_budget_usd : null
+}
+
+output "budget_alert_email" {
+  value = local.enable_budget ? var.budget_alert_email : null
+}
+
+# --- Feature 013: monthly budget alerts (does NOT hard-stop billing) ---
+
+resource "google_monitoring_notification_channel" "budget_email" {
+  count        = local.enable_budget ? 1 : 0
+  display_name = "${var.name_prefix} budget email"
+  type         = "email"
+  labels = {
+    email_address = var.budget_alert_email
+  }
+  depends_on = [google_project_service.services]
+}
+
+resource "google_billing_budget" "monthly" {
+  count           = local.enable_budget ? 1 : 0
+  billing_account = var.billing_account
+  display_name    = "${var.name_prefix}-monthly-${var.monthly_budget_usd}usd"
+
+  budget_filter {
+    projects = ["projects/${data.google_project.current.number}"]
+  }
+
+  amount {
+    specified_amount {
+      currency_code = "USD"
+      units         = tostring(floor(var.monthly_budget_usd))
+    }
+  }
+
+  threshold_rules {
+    threshold_percent = 0.5
+  }
+  threshold_rules {
+    threshold_percent = 0.9
+  }
+  threshold_rules {
+    threshold_percent = 1.0
+  }
+
+  all_updates_rule {
+    monitoring_notification_channels = [
+      google_monitoring_notification_channel.budget_email[0].id,
+    ]
+    disable_default_iam_recipients   = true
+    enable_project_level_recipients  = false
+  }
+
+  depends_on = [google_project_service.services]
 }

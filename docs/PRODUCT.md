@@ -53,6 +53,7 @@ Do **not** develop by deploying to GCP from day one.
 | **010** `product-master-upload-select` | Product master + select product on upload | completed |
 | **011** `bigquery-vector-search-eval` | Eval BigQuery VECTOR_SEARCH vs sqlite-vec — **no-go interactive**; batch OK | completed |
 | **012** `import-experience` | Faster upload→indexed Import (incremental + freshness) | completed (PR) |
+| **013** `gcp-cost-controls` | Monthly GCP budget + spend alerts | completed |
 
 Rules:
 
