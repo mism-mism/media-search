@@ -1,0 +1,5 @@
+{
+  "pass": "vision-product-search",
+  "status": "skipped",
+  "reason": "Google Vision Product Search needs Product Set / reference images and exceeds the \u2264 few USD / quick-setup bar for this bake-off (D2/D7)."
+}

@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""008 SKU / product-retrieval embedder eval (offline).
+
+Usage:
+  ./scripts/sku-embedder-eval              # baseline + openai-vitb32 on synthetic
+  ./scripts/sku-embedder-eval --pass local
+  SKU_EVAL_CORPUS=/path/to/images ./scripts/sku-embedder-eval
+
+Writes JSON under harness/eval/008-sku-product-embedder-eval/.
+Commercial Vision Product Search is skipped by default (setup/cost; D2/D7).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+OUT = ROOT / "harness" / "eval" / "008-sku-product-embedder-eval"
+
+
+def _ensure_corpus(corpus: Path) -> Path:
+    has_images = corpus.is_dir() and (
+        any(corpus.glob("*.png"))
+        or any(corpus.glob("*.jpg"))
+        or any(corpus.glob("*.jpeg"))
+    )
+    if has_images:
+        return corpus
+    from media_search.eval.sku_corpus import write_synthetic_sku_corpus
+
+    write_synthetic_sku_corpus(corpus, skus=4, views=3)
+    return corpus
+
+
+def run_pass(*, name: str, corpus: Path) -> dict:
+    import numpy as np
+
+    from media_search.adapters.openclip_variant_embedder import build_eval_embedder
+    from media_search.eval.sku_corpus import load_corpus_items
+    from media_search.eval.sku_retrieval import score_same_product_retrieval
+
+    embedder = build_eval_embedder(name)
+    items = load_corpus_items(corpus)
+    if not items:
+        raise SystemExit(f"no images in {corpus}")
+
+    vectors = []
+    product_ids = []
+    t0 = time.perf_counter()
+    for _aid, pid, raw in items:
+        vectors.append(embedder.embed_image(raw))
+        product_ids.append(pid)
+    embed_s = time.perf_counter() - t0
+    mat = np.stack(vectors, axis=0)
+    scores = score_same_product_retrieval(vectors=mat, product_ids=product_ids)
+    return {
+        "pass": name,
+        "model_id": getattr(embedder, "model_id", name),
+        "n_images": len(items),
+        "n_queries": scores.n_queries,
+        "recall_at_1": scores.recall_at_1,
+        "recall_at_5": scores.recall_at_5,
+        "embed_wall_seconds": round(embed_s, 3),
+        "product_id_counts": {
+            p: product_ids.count(p) for p in sorted(set(product_ids)) if p
+        },
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--pass",
+        dest="passes",
+        action="append",
+        default=None,
+        help="Eval pass (local, openai-vitb32). Repeatable. Default: both.",
+    )
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        help="Corpus directory (default: harness eval synthetic)",
+    )
+    args = parser.parse_args(argv)
+    passes = args.passes or ["local", "openai-vitb32"]
+    corpus = args.corpus or (OUT / "corpus")
+    corpus = _ensure_corpus(corpus.resolve())
+    OUT.mkdir(parents=True, exist_ok=True)
+
+    commercial = {
+        "pass": "vision-product-search",
+        "status": "skipped",
+        "reason": (
+            "Google Vision Product Search needs Product Set / reference images "
+            "and exceeds the ≤ few USD / quick-setup bar for this bake-off (D2/D7)."
+        ),
+    }
+    (OUT / "commercial-skip.json").write_text(
+        json.dumps(commercial, indent=2) + "\n", encoding="utf-8"
+    )
+
+    summary = {"corpus": str(corpus), "passes": [], "commercial": commercial}
+    for name in passes:
+        print(f"running pass={name} …", flush=True)
+        result = run_pass(name=name, corpus=corpus)
+        summary["passes"].append(result)
+        out = OUT / f"results-{name}.json"
+        out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        print(
+            f"  R@1={result['recall_at_1']:.3f} R@5={result['recall_at_5']:.3f} "
+            f"embed={result['embed_wall_seconds']}s → {out}",
+            flush=True,
+        )
+
+    # Go/no-go helper on R@1
+    by_name = {p["pass"]: p for p in summary["passes"]}
+    baseline = by_name.get("local")
+    candidate = by_name.get("openai-vitb32")
+    verdict = "inconclusive"
+    detail = "need both local and openai-vitb32 passes"
+    if baseline and candidate:
+        b1, c1 = baseline["recall_at_1"], candidate["recall_at_1"]
+        if c1 > b1 + 0.05:
+            verdict = "go-candidate"
+            detail = f"openai-vitb32 R@1 {c1:.3f} clearly > baseline {b1:.3f}"
+        else:
+            verdict = "no-go"
+            detail = (
+                f"openai-vitb32 R@1 {c1:.3f} does not clearly beat baseline {b1:.3f} "
+                "(need +0.05 absolute)"
+            )
+    summary["verdict"] = verdict
+    summary["verdict_detail"] = detail
+    (OUT / "summary.json").write_text(
+        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"verdict={verdict}: {detail}", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

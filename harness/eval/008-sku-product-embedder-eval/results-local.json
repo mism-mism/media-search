@@ -1,0 +1,19 @@
+{
+  "pass": "local",
+  "model_id": "open_clip:xlm-roberta-base-ViT-B-32/laion5b_s13b_b90k",
+  "n_images": 16,
+  "n_queries": 12,
+  "recall_at_1": 0.6666666666666666,
+  "recall_at_5": 0.9166666666666666,
+  "embed_wall_seconds": 0.398,
+  "product_id_counts": {
+    "NEG-001": 1,
+    "NEG-002": 1,
+    "NEG-003": 1,
+    "NEG-004": 1,
+    "SKU-001": 3,
+    "SKU-002": 3,
+    "SKU-003": 3,
+    "SKU-004": 3
+  }
+}
