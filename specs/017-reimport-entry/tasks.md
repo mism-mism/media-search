@@ -41,8 +41,8 @@ The external review comments were not handled before the initial merge. Preserve
 that release history above; reopen this feature for the requested corrections.
 
 - [x] T050 Match the real busy response, cover synchronous/unknown responses, and clarify retry targets (AC5–AC7).
-- [ ] T060 Independent lean reevaluation, lifecycle gates and CI for the correction.
-- [ ] T070 Deploy the correction and link evidence back to the PR #19 comments.
+- [x] T060 Independent lean reevaluation, lifecycle gates and CI for the correction.
+- [x] T070 Deploy the correction and link evidence back to the PR #19 comments.
 
 ### Follow-up evidence and review disposition
 
@@ -62,3 +62,22 @@ that release history above; reopen this feature for the requested corrections.
   Regex handler tests are supplemented by actual Chrome executing the whole script.
   Independent review is by separate role invocation (docs/RUNTIME.md), not distinct
   commits; all 3 independent roles are being rerun for this correction.
+
+### Follow-up delivery (2026-09-07 JST)
+
+- All 3 independent lean follow-up evaluations PASS; lifecycle/pre-merge gates
+  passed; code CI run 34042249007 succeeded. Bugbot completed with no findings;
+  its review body and inline comments were explicitly checked.
+- Real Chrome whole-script scenarios passed: desktop/mobile success, real 409 busy,
+  synchronous summary, and malformed nested-job response; zero page errors.
+- Deployed implementation 66b6ffa as `017-66b6ffa`, digest
+  `sha256:5edfc923ea73a298b93034c370c1a549eeb41fe15752e5147844c936c5efbcd1`.
+  Cloud Run revision `media-search-00025-66t` Ready and 100% traffic; Import Job
+  updated. IAP enabled, anonymous /health HTTP 302. No actual corpus import executed.
+- Replied with correction/evidence/PR #20 to both original threads:
+  https://github.com/mism-mism/media-search/pull/19#discussion_r3944423590
+  https://github.com/mism-mism/media-search/pull/19#discussion_r3944423663
+- Deployment log:
+  /private/tmp/media-search-017-followup-logs/logs/2026-09-07/fca10196-a0d4-494c-8aa9-347ed49a56c7/.
+- Logged-in production browser interaction was not performed. Review-thread
+  resolution and final merge state are recorded on PR #20 after final checks.
