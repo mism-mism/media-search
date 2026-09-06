@@ -108,11 +108,44 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     .view-panel {{ animation: view-in .16s ease-out; }}
     .library-layout {{ display: grid; grid-template-columns: 228px minmax(0, 1fr); min-height: 520px; }}
     .sidebar {{ padding: 28px 20px 32px 0; border-right: 1px solid var(--line); min-width: 0; }}
-    .section-label {{ font-size: .8rem; font-weight: 600; margin-bottom: 16px; }}
-    .folder {{ display: flex; width: 100%; align-items: center; text-align: left; gap: 10px; border: 0; padding: 10px 12px; margin-bottom: 4px; background: transparent; overflow-wrap: anywhere; }}
-    .folder::before {{ content: ''; width: 15px; height: 12px; border: 1.5px solid currentColor; border-radius: 2px; flex-shrink: 0; }}
-    .folder.active {{ color: var(--accent); background: var(--accent-soft); font-weight: 500; }}
-    #folders {{ margin-top: 5px; }}
+    .section-label {{ font-size: .8rem; font-weight: 600; margin-bottom: 12px; }}
+    .here-card {{
+      display: grid; gap: 4px; padding: 12px 14px; margin-bottom: 16px;
+      border: 1px solid #badbd3; border-radius: 8px; background: var(--accent-soft);
+    }}
+    .here-label {{ font-size: .68rem; font-weight: 600; letter-spacing: .06em; color: var(--accent); }}
+    .here-name {{ font-size: .95rem; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }}
+    .crumb-nav {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px 2px; margin-bottom: 14px; }}
+    .crumb-nav button {{
+      border: 0; background: transparent; color: var(--accent); padding: 4px 6px;
+      min-height: 0; font-size: .78rem; font-weight: 500; text-decoration: underline;
+      text-underline-offset: 3px;
+    }}
+    .crumb-nav button:hover {{ background: var(--accent-soft); border-radius: 4px; }}
+    .crumb-nav button[aria-current="page"] {{
+      color: var(--text); text-decoration: none; font-weight: 600; cursor: default;
+    }}
+    .crumb-sep {{ color: var(--muted); font-size: .75rem; user-select: none; }}
+    .folder-list-label {{
+      font-size: .72rem; font-weight: 600; color: var(--muted);
+      letter-spacing: .04em; margin: 8px 0 8px; padding-left: 2px;
+    }}
+    .folder {{
+      display: flex; width: 100%; align-items: center; text-align: left; gap: 10px;
+      border: 1px solid transparent; padding: 10px 12px; margin-bottom: 4px;
+      background: transparent; overflow-wrap: anywhere; border-radius: 6px;
+    }}
+    .folder:hover {{ background: #eef1f4; border-color: var(--line); }}
+    .folder::before {{
+      content: ''; width: 16px; height: 13px; flex-shrink: 0;
+      background: #f0c56d; border: 1px solid #d4a84a; border-radius: 2px 2px 1px 1px;
+      box-shadow: inset 0 2px 0 #f7e0a8;
+    }}
+    .folder.has-children::after {{
+      content: '›'; margin-left: auto; color: var(--muted); font-size: 1.1rem; line-height: 1;
+    }}
+    .folder.active {{ color: var(--accent); background: var(--accent-soft); border-color: #badbd3; font-weight: 600; }}
+    #folders {{ margin-top: 0; }}
     #folders > p {{ padding: 10px 12px; }}
     .folder-create {{ display: grid; gap: 8px; padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--line); }}
     .folder-create label {{ font-size: .75rem; color: var(--muted); }}
@@ -121,7 +154,14 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     .workspace {{ min-width: 0; padding: 28px 0 40px 28px; }}
     .collection-heading {{ display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }}
     .collection-heading > div {{ min-width: 0; }}
-    #crumb {{ font-size: .95rem; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }}
+    #crumb {{ font-size: .95rem; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }}
+    #crumbPath {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }}
+    #crumbPath button {{
+      border: 0; background: transparent; color: var(--accent); padding: 2px 4px;
+      min-height: 0; font-size: .78rem; text-decoration: underline; text-underline-offset: 3px;
+    }}
+    #crumbPath button[aria-current="page"] {{ color: var(--muted); text-decoration: none; cursor: default; }}
+    #crumbPath .crumb-sep {{ color: var(--muted); font-size: .75rem; }}
     .count {{ white-space: nowrap; font-variant-numeric: tabular-nums; }}
     .upload-toolbar {{ display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }}
     #upload {{ display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin-left: auto; }}
@@ -262,9 +302,13 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     <section id="libraryPanel" class="view-panel library-layout" role="tabpanel" aria-labelledby="libraryTab">
       <aside class="sidebar" aria-label="フォルダの管理">
         <h2 class="section-label">フォルダ</h2>
+        <div id="hereCard" class="here-card" aria-live="polite">
+          <span class="here-label">いま見ている場所</span>
+          <span id="hereName" class="here-name">ライブラリ直下</span>
+        </div>
+        <nav id="sideCrumb" class="crumb-nav" aria-label="フォルダのパンくず"></nav>
+        <p class="folder-list-label" id="folderListLabel">直下のフォルダ</p>
         <nav class="folder-nav" aria-label="フォルダを選択">
-          <button id="rootBtn" class="folder active" aria-current="page">ライブラリ直下</button>
-          <button id="parentBtn" class="folder" hidden>ひとつ上へ</button>
           <div id="folders"></div>
         </nav>
         <form id="folderForm" class="folder-create">
@@ -274,7 +318,13 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         </form>
       </aside>
       <div class="workspace">
-        <div class="collection-heading"><h2 id="crumb">ライブラリ / 直下</h2><span id="count" class="muted count"></span></div>
+        <div class="collection-heading">
+          <div>
+            <h2 id="crumb">ライブラリ直下</h2>
+            <nav id="crumbPath" aria-label="現在地のパス"></nav>
+          </div>
+          <span id="count" class="muted count"></span>
+        </div>
         <div id="uploadToolbar" class="upload-toolbar" role="group" aria-label="現在のフォルダに素材を追加">
           <div class="file-picker"><label for="file">ファイルを選択</label><input id="file" type="file" accept=".jpg,.jpeg,.png,.mp4" multiple aria-describedby="fileName uploadHint" /></div>
           <span id="fileName" class="muted">未選択</span>
@@ -321,11 +371,13 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     const out = document.getElementById('out');
     const statusEl = document.getElementById('status');
     const crumb = document.getElementById('crumb');
+    const hereName = document.getElementById('hereName');
+    const sideCrumb = document.getElementById('sideCrumb');
+    const crumbPath = document.getElementById('crumbPath');
+    const folderListLabel = document.getElementById('folderListLabel');
     const uploadBtn = document.getElementById('upload');
     const uploadProduct = document.getElementById('uploadProduct');
     const fileInput = document.getElementById('file');
-    const rootBtn = document.getElementById('rootBtn');
-    const parentBtn = document.getElementById('parentBtn');
     const views = ['library', 'search', 'products'];
 
     // API names and IDs are data, including when used in HTML attributes.
@@ -365,18 +417,46 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     function emptyState(title, message, action = '', label = '') {{
       return `<div class="empty-state"><span class="empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m3 18 5-5 4 4 4-6 5 7"/></svg></span><h3>${{esc(title)}}</h3><p>${{esc(message)}}</p>${{action ? `<button class="primary" data-empty-action="${{esc(action)}}">${{esc(label)}}</button>` : ''}}</div>`;
     }}
-    function folderPath() {{
-      const names = [];
+    function folderTrail() {{
+      const trail = [{{ id: null, name: 'ライブラリ直下' }}];
       const visited = new Set();
       let id = currentFolder;
+      const stack = [];
       while (id && !visited.has(id)) {{
         visited.add(id);
         const folder = folderCache.find(f => f.folder_id === id);
         if (!folder) break;
-        names.unshift(folder.name);
+        stack.unshift({{ id: folder.folder_id, name: folder.name }});
         id = folder.parent_id;
       }}
-      return ['ライブラリ', ...(names.length ? names : ['直下'])].join(' / ');
+      return trail.concat(stack);
+    }}
+    function currentFolderName() {{
+      if (!currentFolder) return 'ライブラリ直下';
+      return folderCache.find(f => f.folder_id === currentFolder)?.name || 'フォルダ';
+    }}
+    function renderCrumbNav(el, trail) {{
+      el.innerHTML = trail.map((seg, i) => {{
+        const last = i === trail.length - 1;
+        const btn = `<button type="button" data-crumb="${{seg.id == null ? '' : esc(seg.id)}}" ${{last ? 'aria-current="page"' : ''}}>${{esc(seg.name)}}</button>`;
+        return i === 0 ? btn : `<span class="crumb-sep" aria-hidden="true">/</span>${{btn}}`;
+      }}).join('');
+      el.querySelectorAll('button[data-crumb]').forEach(btn => {{
+        if (btn.getAttribute('aria-current') === 'page') return;
+        btn.onclick = () => runAction(async () => {{
+          currentFolder = btn.dataset.crumb || null;
+          await refreshAll();
+        }});
+      }});
+    }}
+    function updateLocationChrome() {{
+      const trail = folderTrail();
+      const name = currentFolderName();
+      hereName.textContent = name;
+      crumb.textContent = name;
+      renderCrumbNav(sideCrumb, trail);
+      renderCrumbNav(crumbPath, trail);
+      folderListLabel.textContent = currentFolder ? 'このフォルダの中' : '直下のフォルダ';
     }}
     function setView(view) {{
       activeView = view;
@@ -387,7 +467,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
         tab.setAttribute('aria-selected', String(selected));
         tab.tabIndex = selected ? 0 : -1;
       }});
-      crumb.textContent = folderPath();
+      updateLocationChrome();
       document.getElementById('count').textContent = `${{assetCount}} 点`;
       document.getElementById('searchHeading').textContent = lastQuery ? `「${{lastQuery}}」の検索結果` : '検索結果';
       document.getElementById('searchCount').textContent = resultCount === null ? '' : `${{resultCount}} 件 · 関連度順`;
@@ -426,13 +506,12 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       if (folder) params.set('parent_id', folder);
       const body = await requestJson('/api/library/folders?' + params.toString());
       if (folder !== currentFolder) return;
-      rootBtn.classList.toggle('active', !folder);
-      if (folder) rootBtn.removeAttribute('aria-current');
-      else rootBtn.setAttribute('aria-current', 'page');
-      parentBtn.hidden = !folder;
-      foldersEl.innerHTML = (body.folders || []).map(f =>
-        `<button class="folder" data-id="${{esc(f.folder_id)}}">${{esc(f.name)}}</button>`
-      ).join('') || '<p class="muted">フォルダを作成して素材を整理できます。</p>';
+      updateLocationChrome();
+      const children = body.folders || [];
+      const hasGrandchildren = id => folderCache.some(f => f.parent_id === id);
+      foldersEl.innerHTML = children.map(f =>
+        `<button type="button" class="folder${{hasGrandchildren(f.folder_id) ? ' has-children' : ''}}" data-id="${{esc(f.folder_id)}}">${{esc(f.name)}}</button>`
+      ).join('') || '<p class="muted">下のフォルダはありません。必要なら新規作成できます。</p>';
       foldersEl.querySelectorAll('.folder').forEach(el => {{
         el.onclick = () => runAction(async () => {{ currentFolder = el.dataset.id; await refreshAll(); }});
       }});
@@ -548,11 +627,6 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
       await refreshProducts();
       await refreshAssets();
     }}
-    rootBtn.onclick = () => runAction(async () => {{ currentFolder = null; await refreshAll(); }});
-    parentBtn.onclick = () => runAction(async () => {{
-      currentFolder = folderCache.find(f => f.folder_id === currentFolder)?.parent_id || null;
-      await refreshAll();
-    }});
     views.forEach((view, index) => {{
       const tab = document.getElementById(view + 'Tab');
       tab.onclick = () => setView(view);
