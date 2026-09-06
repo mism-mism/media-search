@@ -28,6 +28,16 @@ no button was present. Add the requested visible UI entry for existing media.
   failure; run regression suite, lean independent reviews, hooks and CI. Deploy
   the reviewed UI and record actual verification limitations.
 
+## Review follow-up acceptance (PR #19)
+
+- AC5. Use the real HTTP409 object detail (`error=import_busy`) in UI tests;
+  show a fixed Japanese busy message without exposing the holder identifier.
+- AC6. Test synchronous ImportResponse (imported/updated/skipped arrays): refresh
+  cards, success banner, no job polling, and restored controls. Unknown response
+  shapes must show an error rather than claiming completion.
+- AC7. Toolbar guidance explicitly includes failed and deferred image generation
+  in the next reimport, while retaining whole-library scope and default cap.
+
 ## Constraints / Out of Scope
 
 Keep existing visual style and accessible native buttons/live status. No new API,

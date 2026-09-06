@@ -48,3 +48,50 @@ and deployment remain tracked in T030/T040 and must complete before overall
 completion is claimed. Production IAP browser access was unavailable; no real
 corpus import or production inference was run. Record deployment evidence and
 these verification limitations in the release report.
+
+## Follow-up review — 2026-09-07, PR #19 comments
+
+Verdict: PASS
+
+Independent Outer reevaluation of the current correction against `origin/main`
+at `2d1bedb`, covering AC5–AC7 and T050–T070. The original review and initial
+release evidence above remain history. This evaluator changed only this review.
+
+- **AC5:** The real endpoint returns HTTP 409 with object detail containing
+  `error: import_busy` and a holder identifier. The shared UI request handler
+  now translates that known response into a fixed Japanese explanation that
+  another import is running and asks the user to retry after completion. It
+  does not expose the holder. Tests assert the actual response shape and exact
+  visible message; the whole-script Chrome busy scenario checks the same
+  message through the actual button event, without polling.
+- **AC6:** A synchronous `ImportResponse` with imported/updated/skipped arrays
+  refreshes cards and displays completion without job polling. Controls restore
+  through the existing finally path. A malformed nested-job response now shows
+  an explicit error instead of the previous false completion. Emitted-handler
+  tests cover both cases, and the inspected Chrome script independently
+  exercises these branches in the whole rendered script with controlled API
+  responses. Async job handling remains intact.
+- **AC7:** Toolbar copy explicitly includes images whose generation failed and
+  images deferred by the per-import cap. It retains all-folder scope, the
+  default 50-image limit and reuse of generated content. Inspected the updated
+  390-pixel screenshot: the longer explanation wraps readably and the native
+  button remains visible in its row below upload controls.
+
+The three requested corrections are addressed without adding API behavior or
+changing import scope. The documented residual-risk dispositions are
+proportionate: automatic progress resumption is outside this correction; the
+existing server lock still guards execution after polling interruption; the UI
+identifies 50 as the default rather than promising the runtime-configured limit.
+Whole-script browser checks supplement the regex-extracted handler tests.
+
+Independent Inner reevaluations PASS; the test evaluator directly observed
+11 passing targeted tests. The implementer reports 150 regression tests passed
+with one optional skip, and five Chrome scenarios passed with no page errors
+(desktop/mobile async success, busy conflict, synchronous success and malformed
+response). I inspected the browser script and mobile screenshot but did not
+rerun these executions. Browser responses are fixtures, not production imports.
+
+No blocking product implementation gap was found. This follow-up PASS is a
+pre-release evaluation; current-review lifecycle gates, CI, corrected deployment
+and links back to PR #19 comments remain T060/T070 completion obligations. It
+does not certify production browser interaction or whole-corpus reimport.
