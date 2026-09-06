@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import shutil
 import tempfile
 import threading
@@ -10,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from media_search.domain.categories import catalog_version
+from media_search.ports.categories import CategoryClassificationError, CategoryClassifierPort, CategoryRepositoryPort
 from media_search.domain.formats import classify_path
 from media_search.domain.frames import (
     MAX_REPRESENTATIVE_FRAMES,
@@ -59,6 +62,9 @@ class ImportDirectory:
         embed_workers: int | None = None,
         annotator: ImageAnnotationPort | None = None,
         max_annotations: int = 50,
+        categories: CategoryRepositoryPort | None = None,
+        classifier: CategoryClassifierPort | None = None,
+        max_classifications: int = 50,
     ) -> None:
         self._embedder = embedder
         self._vectors = vectors
@@ -67,6 +73,11 @@ class ImportDirectory:
         self._work_dir = work_dir
         self._frame_store = frame_store
         self._annotator = annotator
+        self._categories = categories
+        self._classifier = classifier
+        if max_classifications < 1:
+            raise ValueError("max_classifications must be positive")
+        self._max_classifications = max_classifications
         if max_annotations < 1:
             raise ValueError("max_annotations must be positive")
         self._max_annotations = max_annotations
@@ -94,6 +105,8 @@ class ImportDirectory:
         total = len(keys)
         processed = 0
         annotation_count = 0
+        classification_count = 0
+        categories = tuple(self._categories.list_all()) if self._categories and self._classifier else ()
         annotation_lock = threading.Lock()
 
         def claim_annotation() -> bool:
@@ -102,6 +115,14 @@ class ImportDirectory:
                 if annotation_count >= self._max_annotations:
                     return False
                 annotation_count += 1
+                return True
+
+        def claim_classification() -> bool:
+            nonlocal classification_count
+            with annotation_lock:
+                if classification_count >= self._max_classifications:
+                    return False
+                classification_count += 1
                 return True
 
         def _bump() -> None:
@@ -113,7 +134,7 @@ class ImportDirectory:
         try:
             with ThreadPoolExecutor(max_workers=self._embed_workers) as pool:
                 futures = {
-                    pool.submit(self._prepare_one, storage, stage, key, claim_annotation): key
+                    pool.submit(self._prepare_one, storage, stage, key, claim_annotation, categories, claim_classification): key
                     for key in keys
                 }
                 for fut in as_completed(futures):
@@ -197,6 +218,8 @@ class ImportDirectory:
         stage: Path,
         key: str,
         claim_annotation: Callable[[], bool],
+        categories,
+        claim_classification: Callable[[], bool],
     ) -> _PreparedAsset | ImportWarning:
         needs, existed, skip_reason = self._needs_embed(storage, key)
         annotation_only = (
@@ -204,13 +227,24 @@ class ImportDirectory:
             and existed is not None and existed.media_type == MediaType.IMAGE
             and existed.annotation is None
         )
-        if not needs and not annotation_only:
+        # Catalog-enabled images must be read to validate the source fingerprint,
+        # even when legacy embedding detection considers their byte length unchanged.
+        classification_only = (not needs and skip_reason == "unchanged" and existed is not None
+                               and existed.media_type == MediaType.IMAGE and bool(categories))
+        metadata_only = annotation_only or classification_only
+        if not needs and not metadata_only:
             return ImportWarning(path=key, reason=skip_reason or "unchanged")
 
         worker_stage = stage / f"w-{uuid.uuid4().hex}"
         worker_stage.mkdir(parents=True, exist_ok=True)
         try:
             with storage.materialize(key, worker_stage) as local_path:
+                image_bytes = local_path.read_bytes() if categories and classify_path(Path(key)) == "image" else None
+                image_sha256 = hashlib.sha256(image_bytes).hexdigest() if image_bytes is not None else ""
+                source_changed = bool(existed and existed.category_report and existed.category_report.image_sha256
+                                      and image_sha256 and existed.category_report.image_sha256 != image_sha256)
+                if source_changed:
+                    metadata_only = False
                 asset = self._media_probe.build_asset(
                     local_path, import_root=local_path.parent
                 )
@@ -227,12 +261,19 @@ class ImportDirectory:
                 else:
                     asset = replace(asset, display_name=Path(key).name)
 
-                if annotation_only:
+                if metadata_only:
                     asset = existed
-                elif existed is not None and existed.size_bytes == asset.size_bytes:
-                    asset = replace(asset, annotation=existed.annotation, annotation_error=existed.annotation_error)
+                elif existed is not None and existed.size_bytes == asset.size_bytes and not source_changed:
+                    asset = replace(asset, annotation=existed.annotation, annotation_error=existed.annotation_error,
+                                    category_report=existed.category_report, category_error=existed.category_error)
 
-                frames = None if annotation_only else self._embed_frames(local_path, asset)
+                classification_needed = bool(categories) and asset.media_type == MediaType.IMAGE and (
+                    asset.category_report is None or asset.category_report.catalog_version != catalog_version(categories)
+                    or asset.category_report.image_sha256 != image_sha256
+                )
+                if metadata_only and not classification_needed and (self._annotator is None or asset.annotation is not None):
+                    return ImportWarning(path=key, reason="unchanged")
+                frames = None if metadata_only else self._embed_frames(local_path, asset)
                 if self._annotator is not None and asset.media_type == MediaType.IMAGE and asset.annotation is None:
                     if claim_annotation():
                         try:
@@ -242,6 +283,16 @@ class ImportDirectory:
                             asset = replace(asset, annotation=None, annotation_error="generation_failed")
                     else:
                         asset = replace(asset, annotation=None, annotation_error="limit_reached")
+                if classification_needed:
+                    asset = replace(asset, category_report=None, category_error="")
+                    if claim_classification():
+                        try:
+                            report = self._classifier.classify(image_bytes, categories)
+                            asset = replace(asset, category_report=replace(report, image_sha256=image_sha256))
+                        except CategoryClassificationError:
+                            asset = replace(asset, category_error="classification_failed")
+                    else:
+                        asset = replace(asset, category_error="limit_reached")
                 return _PreparedAsset(
                     key=key,
                     asset=asset,
