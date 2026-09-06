@@ -144,6 +144,14 @@ class SqliteMetadataRepository:
             ).fetchall()
         return [_row_to_asset(r) for r in rows]
 
+    def count_by_product_id(self, product_id: str) -> int:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) AS c FROM assets WHERE product_id = ?",
+                (product_id,),
+            ).fetchone()
+        return int(row["c"] if row is not None else 0)
+
     def delete(self, asset_id: str) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM assets WHERE asset_id = ?", (asset_id,))
@@ -238,6 +246,61 @@ class SqliteFolderRepository:
             if asset:
                 raise ValueError("folder not empty (has assets)")
             self._conn.execute("DELETE FROM folders WHERE folder_id = ?", (folder_id,))
+            self._conn.commit()
+
+
+class SqliteProductRepository:
+    def __init__(self, conn: sqlite3.Connection, *, lock: threading.Lock | None = None) -> None:
+        self._conn = conn
+        self._lock = lock or threading.Lock()
+        with self._lock:
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS products (
+                  product_id TEXT PRIMARY KEY,
+                  name TEXT NOT NULL
+                )
+                """
+            )
+            self._conn.commit()
+
+    def upsert(self, product) -> None:
+        from media_search.domain.product import Product
+
+        assert isinstance(product, Product)
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO products(product_id, name) VALUES (?,?)
+                ON CONFLICT(product_id) DO UPDATE SET name=excluded.name
+                """,
+                (product.product_id, product.name),
+            )
+            self._conn.commit()
+
+    def get(self, product_id: str):
+        from media_search.domain.product import Product
+
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM products WHERE product_id = ?", (product_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return Product(product_id=row["product_id"], name=row["name"])
+
+    def list_all(self):
+        from media_search.domain.product import Product
+
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM products ORDER BY name, product_id"
+            ).fetchall()
+        return [Product(product_id=r["product_id"], name=r["name"]) for r in rows]
+
+    def delete(self, product_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM products WHERE product_id = ?", (product_id,))
             self._conn.commit()
 
 
