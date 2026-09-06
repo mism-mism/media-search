@@ -26,3 +26,8 @@ those artifacts existed, `post-implement`, `pre-review` and explicit
 `FEATURE=018-scale-to-zero ./scripts/verify` all passed on 2026-09-07. Each
 feature verify reported 14 passed, 0 failed, 10 explicitly unconfigured/skipped
 harness checks; the application regression suite remained successful.
+
+`pre-merge` also passed against implementation commit `eb72560` and the diff
+from `origin/main`: 4 passed, 0 failed, 1 unchanged-constitution skip. The branch
+was pushed and [PR #21](https://github.com/mism-mism/media-search/pull/21) opened.
+The feature delivery ends at an open PR; no merge or Terraform apply is claimed.
