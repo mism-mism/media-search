@@ -45,7 +45,8 @@ runs the CLI as the `media` user.
   media_type, score, tags, thumbnail}], html}`: `thumbnail` is a base64 JPEG at
   most 512 px on the long side (the representative frame for videos), `html` is
   one self-contained page (thumbnails as data URIs, every text field escaped, no
-  scripts). Without `--json` it prints one line per hit.
+  scripts). A hit whose thumbnail cannot be read keeps `thumbnail: ""` and is left out of
+  the page; the search still exits 0. Without `--json` it prints one line per hit.
 - AC3. `python -m media_search.cli import [--json]` imports the configured media
   root through the resident API (`POST /api/import`, waits for the job) and prints `{imported, updated, skipped}` (the same lists as `POST /api/import`). A busy
   lock exits with code 75 and `{error: "import_busy"}`; other failures exit 1 with
