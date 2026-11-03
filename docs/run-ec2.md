@@ -59,5 +59,7 @@ Video import needs `ffmpeg`/`ffprobe` on PATH; the current data is images only.
 
 ## Rollback
 
-GCS, Cloud Run, IAP and Terraform stay untouched for two weeks after the move
-(see `specs/020-ec2-local-runtime/clarify.md` D3).
+The GCS data was not copied (clarify.md D4): EC2 starts empty and GCS keeps the
+old library. Rolling back means redeploying Cloud Run (`make deploy`) against GCS;
+images and tags imported on EC2 are not carried back. Keep the GCS bucket until
+the operator decides the old library is no longer needed.
