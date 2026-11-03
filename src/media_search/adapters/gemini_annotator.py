@@ -29,16 +29,32 @@ def _authorized_session():
     return AuthorizedSession(credentials, max_refresh_attempts=0)
 
 
+def _api_key_session(api_key: str):
+    """AI Studio transport: the key travels only in a header, never in the URL."""
+    import requests
+
+    session = requests.Session()
+    session.headers["x-goog-api-key"] = api_key
+    return session
+
+
 class GeminiImageAnnotator:
     """Import-time image description; transport and credentials stay in this adapter."""
 
-    def __init__(self, *, project: str, model: str = DEFAULT_MODEL, location: str = "global", session_factory=None):
-        if any(not re.fullmatch(r"[A-Za-z0-9_-]+", value) for value in (project, location)) or not re.fullmatch(r"[A-Za-z0-9_.-]+", model):
-            raise ValueError("invalid annotation project, model or location")
-        host = "aiplatform.googleapis.com" if location == "global" else f"{location}-aiplatform.googleapis.com"
-        self._url = f"https://{host}/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent"
+    def __init__(self, *, project: str = "", model: str = DEFAULT_MODEL, location: str = "global", session_factory=None, api_key: str = ""):
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", model):
+            raise ValueError("invalid annotation model")
+        if api_key:
+            # AI Studio (API key). Same request and response shape as Vertex.
+            self._url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            self._session_factory = session_factory or (lambda: _api_key_session(api_key))
+        else:
+            if any(not re.fullmatch(r"[A-Za-z0-9_-]+", value) for value in (project, location)):
+                raise ValueError("invalid annotation project or location")
+            host = "aiplatform.googleapis.com" if location == "global" else f"{location}-aiplatform.googleapis.com"
+            self._url = f"https://{host}/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent"
+            self._session_factory = session_factory or _authorized_session
         self._model = model
-        self._session_factory = session_factory or _authorized_session
         self._local = threading.local()
 
     def annotate(self, image_bytes: bytes) -> ImageAnnotation:

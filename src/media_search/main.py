@@ -48,22 +48,30 @@ def _build_embedder():
     raise SystemExit(f"unsupported EMBEDDER={name!r}")
 
 
+def _gemini_settings() -> dict:
+    """Gemini transport shared by the annotator and the classifier.
+    GEMINI_API_KEY → AI Studio; otherwise Vertex with ADC (needs GOOGLE_CLOUD_PROJECT)."""
+    from media_search.adapters.gemini_annotator import DEFAULT_MODEL
+
+    model = os.environ.get("IMAGE_ANNOTATION_MODEL", DEFAULT_MODEL)
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if api_key:
+        return {"api_key": api_key, "model": model}
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
+    if not project:
+        raise ValueError("GEMINI_API_KEY or GOOGLE_CLOUD_PROJECT is required for Gemini annotation")
+    return {"project": project, "model": model, "location": os.environ.get("IMAGE_ANNOTATION_LOCATION", "global")}
+
+
 def _build_annotator() -> ImageAnnotationPort | None:
     backend = os.environ.get("IMAGE_ANNOTATION_BACKEND", "off").strip().lower()
     if backend == "off":
         return None
     if backend != "gemini":
         raise ValueError(f"unsupported IMAGE_ANNOTATION_BACKEND={backend!r}")
-    project = os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
-    if not project:
-        raise ValueError("GOOGLE_CLOUD_PROJECT is required for Gemini annotation")
-    from media_search.adapters.gemini_annotator import DEFAULT_MODEL, GeminiImageAnnotator
+    from media_search.adapters.gemini_annotator import GeminiImageAnnotator
 
-    return GeminiImageAnnotator(
-        project=project,
-        model=os.environ.get("IMAGE_ANNOTATION_MODEL", DEFAULT_MODEL),
-        location=os.environ.get("IMAGE_ANNOTATION_LOCATION", "global"),
-    )
+    return GeminiImageAnnotator(**_gemini_settings())
 
 
 def _build_media_storage(data_dir: Path) -> MediaStoragePort:
@@ -179,12 +187,7 @@ def build_runtime() -> Runtime:
     classifier = None
     if annotator is not None:
         from media_search.adapters.gemini_categories import GeminiCategoryClassifier
-        from media_search.adapters.gemini_annotator import DEFAULT_MODEL
-        classifier = GeminiCategoryClassifier(
-            project=os.environ["GOOGLE_CLOUD_PROJECT"],
-            model=os.environ.get("IMAGE_ANNOTATION_MODEL", DEFAULT_MODEL),
-            location=os.environ.get("IMAGE_ANNOTATION_LOCATION", "global"),
-        )
+        classifier = GeminiCategoryClassifier(**_gemini_settings())
     max_classifications = int(os.environ.get("CATEGORY_MAX_PER_IMPORT", "50"))
     importer = ImportDirectory(
         embedder=embedder,
