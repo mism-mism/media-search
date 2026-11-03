@@ -56,4 +56,4 @@ def test_gemini_api_key_needs_no_project_and_feeds_annotator_and_classifier(runt
     assert runtime.categories is not None
     assert len(built) == 2, "annotator and category classifier share the transport"
     assert all(kw.get("api_key") == "test-key" and "project" not in kw for kw in built)
-    assert all(GeminiImageAnnotator(**kw)._url.startswith("https://generativelanguage.googleapis.com/") for kw in built)
+    assert all(GeminiImageAnnotator(**kw)._url.startswith("https://generativelanguage.googleapis.com/") for kw in list(built))
