@@ -1,7 +1,7 @@
 # Checklist: ec2-local-runtime
 
-Requirements-quality checklist (“unit tests for English”).  
-`[x]` means the **requirement text** is clear and testable — not that code is done.  
+Requirements-quality checklist (“unit tests for English”).
+`[x]` means the **requirement text** is clear and testable — not that code is done.
 Reviewer-owned; implementers must not self-approve on full profile.
 
 ## Clarity

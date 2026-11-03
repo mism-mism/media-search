@@ -67,6 +67,61 @@ def test_import_then_search_returns_thumbnails_and_one_escaped_html_page(capsys,
     assert code == 0 and len(out.strip().splitlines()) == 2, "without --json, one line per hit"
 
 
+def test_an_unreadable_thumbnail_leaves_that_hit_without_an_image(capsys):
+    def fetch(method, path):
+        if path.startswith("/api/search"):
+            return json.dumps({"results": [{"asset_id": "v.mp4", "media_type": "video", "score": 0.5, "tags": [], "thumbnail_url": "/thumbnails/missing"}]}).encode()
+        raise cli.ApiError(404)
+
+    code, out = run(capsys, ["search", "x", "--json"], fetch)
+    result = json.loads(out)
+    assert code == 0 and result["hits"][0]["thumbnail"] == "" and "data:image" not in result["html"]
+
+
+def test_generated_tags_are_escaped_in_the_page(capsys):
+    def fetch(method, path):
+        if path.startswith("/api/search"):
+            return json.dumps({"results": [{"asset_id": "a.png", "media_type": "image", "score": 0.9, "tags": [], "thumbnail_url": "/media/a.png",
+                                            "annotation": {"tags": ["<img src=x onerror=alert(1)>"]}}]}).encode()
+        out = BytesIO()
+        Image.new("RGB", (8, 8), "white").save(out, "PNG")
+        return out.getvalue()
+
+    code, out = run(capsys, ["search", "x", "--json"], fetch)
+    page = json.loads(out)["html"]
+    assert code == 0 and "&lt;img src=x onerror=alert(1)&gt;" in page and "<img src=x" not in page
+
+
+def test_http_fetch_uses_media_search_api_and_maps_http_errors(monkeypatch):
+    import urllib.error
+
+    seen = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b"ok"
+
+    def urlopen(request, timeout):
+        seen.append((request.get_method(), request.full_url, timeout))
+        if request.full_url.endswith("/missing"):
+            raise urllib.error.HTTPError(request.full_url, 404, "nf", {}, None)
+        return Response()
+
+    monkeypatch.setenv("MEDIA_SEARCH_API", "http://127.0.0.1:9999/")
+    monkeypatch.setattr(cli.urllib.request, "urlopen", urlopen)
+    assert cli.http_fetch("POST", "/api/import") == b"ok"
+    assert seen[0][:2] == ("POST", "http://127.0.0.1:9999/api/import")
+    with pytest.raises(cli.ApiError) as caught:
+        cli.http_fetch("GET", "/missing")
+    assert caught.value.status == 404
+
+
 def test_tags_merge_annotation_and_categories():
     hit = {"tags": ["a"], "annotation": {"tags": ["b", "a"]}, "category_report": {"tags": ["c"]}}
     assert cli._tags(hit) == ["a", "b", "c"]
@@ -77,7 +132,13 @@ def test_busy_lock_exits_75_and_failures_print_no_traceback(capsys, fetch):
         raise cli.ApiError(409)
 
     code, out = run(capsys, ["import", "--json"], busy)
-    assert code == cli.EXIT_BUSY and json.loads(out) == {"error": "import_busy"}
+    assert code == 75 and json.loads(out) == {"error": "import_busy"}, "EX_TEMPFAIL: the dispatcher retries later"
+
+    def failed_job(method, path):
+        return json.dumps({"job_id": "j1", "status": "failed", "error": "provider body"}).encode()
+
+    code, out = run(capsys, ["import", "--json"], failed_job)
+    assert code == 1 and json.loads(out) == {"error": "import_failed"}, "a failed job is not reported as an empty success"
 
     def broken(method, path):
         raise RuntimeError("provider said: secret body")

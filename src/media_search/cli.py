@@ -85,6 +85,14 @@ def _tags(hit: dict) -> list[str]:
     return list(dict.fromkeys([*hit.get("tags", []), *generated, *categories]))
 
 
+def _thumbnail_or_blank(fetch, url: str) -> str:
+    """One unreadable thumbnail (a video without a frame, a broken file) must not fail the whole search."""
+    try:
+        return thumbnail(fetch("GET", url))
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def search(fetch, query: str, top_k: int) -> dict:
     if not query.strip():
         raise ValueError("empty_query")
@@ -97,7 +105,7 @@ def search(fetch, query: str, top_k: int) -> dict:
             "media_type": r["media_type"],
             "score": round(float(r["score"]), 4),
             "tags": _tags(r),
-            "thumbnail": thumbnail(fetch("GET", r["thumbnail_url"])),
+            "thumbnail": _thumbnail_or_blank(fetch, r["thumbnail_url"]),
         }
         for r in results
     ]

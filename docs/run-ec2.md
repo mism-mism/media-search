@@ -29,6 +29,10 @@ OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 TOKENIZERS_PARALLELISM=false
 # media.env (the operator writes it): GEMINI_API_KEY=<AI Studio key>
 ```
 
+Install with `pip install ".[semantic,gemini-key]"` (CPU torch first): without the
+`gemini-key` extra (`requests`) the service starts but every annotation fails as
+`generation_failed`.
+
 Leave out `MEDIA_SEARCH_DB_GCS`, `GCS_BUCKET`, `CLOUD_RUN_IMPORT_JOB`,
 `IMPORT_JOB_BACKEND` and `GOOGLE_CLOUD_PROJECT`. With `GEMINI_API_KEY` set,
 annotation and category classification call
@@ -38,6 +42,8 @@ project). The `media` user's proxy must allow that host.
 ## CLI
 
 The dispatcher calls the CLI as the `media` user; it never reads `/srv/media`.
+The CLI loads no model: it calls the resident service at `MEDIA_SEARCH_API`
+(default `http://127.0.0.1:3200`, socket-activated on EC2).
 
 ```bash
 python -m media_search.cli search "白いボトル" --top-k 10 --json

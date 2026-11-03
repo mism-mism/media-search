@@ -116,7 +116,12 @@ def test_api_key_transport_uses_ai_studio_and_keeps_the_key_out_of_url_and_error
     assert "secret-key" not in repr(caught.value) and caught.value.__cause__ is None
 
 
-def test_api_key_session_sends_the_key_as_a_header():
+def test_api_key_session_sends_the_key_as_a_header(monkeypatch):
+    import sys
+    import types
+
     from media_search.adapters.gemini_annotator import _api_key_session
 
-    assert _api_key_session("k-123").headers["x-goog-api-key"] == "k-123"
+    # CI installs only the dev extra, so stand in for requests.Session
+    monkeypatch.setitem(sys.modules, "requests", types.SimpleNamespace(Session=lambda: types.SimpleNamespace(headers={})))
+    assert _api_key_session("k-123").headers == {"x-goog-api-key": "k-123"}
