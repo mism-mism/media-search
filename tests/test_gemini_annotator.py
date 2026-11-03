@@ -95,3 +95,33 @@ def test_invalid_image_never_calls_provider():
     with pytest.raises(ImageAnnotationError):
         GeminiImageAnnotator(project="p", session_factory=lambda: session).annotate(b"invalid")
     assert not session.calls
+
+
+def test_api_key_transport_uses_ai_studio_and_keeps_the_key_out_of_url_and_errors(monkeypatch):
+    from media_search.adapters import gemini_annotator
+
+    session = Session(response(json.dumps({"tags": ["白いボトル"], "description": "白い容器。"})))
+    made = []
+    monkeypatch.setattr(gemini_annotator, "_api_key_session", lambda key: made.append(key) or session)
+    result = GeminiImageAnnotator(api_key="secret-key").annotate(png())
+    assert result.tags == ("白いボトル",)
+    url, _ = session.calls[0]
+    assert url == "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
+    assert made == ["secret-key"] and "secret-key" not in url
+
+    failing = Session(status=403)
+    monkeypatch.setattr(gemini_annotator, "_api_key_session", lambda key: failing)
+    with pytest.raises(ImageAnnotationError) as caught:
+        GeminiImageAnnotator(api_key="secret-key").annotate(png())
+    assert "secret-key" not in repr(caught.value) and caught.value.__cause__ is None
+
+
+def test_api_key_session_sends_the_key_as_a_header(monkeypatch):
+    import sys
+    import types
+
+    from media_search.adapters.gemini_annotator import _api_key_session
+
+    # CI installs only the dev extra, so stand in for requests.Session
+    monkeypatch.setitem(sys.modules, "requests", types.SimpleNamespace(Session=lambda: types.SimpleNamespace(headers={})))
+    assert _api_key_session("k-123").headers == {"x-goog-api-key": "k-123"}

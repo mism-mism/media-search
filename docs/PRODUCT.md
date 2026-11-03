@@ -27,7 +27,7 @@ credentials, then later deploys the same application core to GCP via adapters.
 |-------|--------|
 | Development / Feature 001 | Local-first (no GCP required) |
 | Reproducible runtime (part of 001) | Thin container for the local slice |
-| Production | **GCP** — Cloud Run + GCS (+ OpenCLIP / sqlite-vec in 002; Vertex later) |
+| Production | **Shared EC2** (since 2026-11-03, spec 020) — local adapters behind Cloudflare Access, searched from the Slack front desk of mism-mism/mk2-harness. Before: GCP Cloud Run + GCS (002), kept for rollback |
 
 Development order:
 

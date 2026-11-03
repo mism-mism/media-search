@@ -42,3 +42,18 @@ def test_runtime_import_uses_configured_annotation_adapter(runtime_module, monke
     runtime = runtime_module.build_runtime()
     runtime.importer.execute_storage(runtime.media_storage)
     assert runtime.metadata.get("test.png").annotation.tags == ("白い背景",)
+
+
+def test_gemini_api_key_needs_no_project_and_feeds_annotator_and_classifier(runtime_module, monkeypatch):
+    from media_search.adapters.gemini_annotator import GeminiImageAnnotator
+    monkeypatch.setenv("IMAGE_ANNOTATION_BACKEND", "gemini")
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    built = []
+    original = GeminiImageAnnotator.__init__
+    monkeypatch.setattr(GeminiImageAnnotator, "__init__", lambda self, **kw: built.append(kw) or original(self, **kw))
+    runtime = runtime_module.build_runtime()
+    assert runtime.categories is not None
+    assert len(built) == 2, "annotator and category classifier share the transport"
+    assert all(kw.get("api_key") == "test-key" and "project" not in kw for kw in built)
+    assert all(GeminiImageAnnotator(**kw)._url.startswith("https://generativelanguage.googleapis.com/") for kw in list(built))

@@ -30,6 +30,9 @@ gcp = [
   "google-cloud-run>=0.10.0",
   "google-cloud-bigquery>=3.25.0",
 ]
+gemini-key = [
+  "requests>=2.32.0",
+]
 semantic = [
   "open-clip-torch>=2.24.0",
   "torch>=2.2.0",
