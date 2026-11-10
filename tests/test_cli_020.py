@@ -215,3 +215,21 @@ def test_http_fetch_reports_a_dead_service_as_unavailable(monkeypatch):
     monkeypatch.setattr(cli.urllib.request, "urlopen", urlopen)
     with pytest.raises(cli.UnavailableError):
         cli.http_fetch("GET", "/api/search")
+
+
+def test_bad_score_and_abbreviated_flags_are_usage_errors_and_a_cut_response_is_retryable(capsys, monkeypatch):
+    import http.client
+
+    def never(method, path):
+        raise AssertionError("must not reach the service")
+
+    for argv in (["search", "x", "--min-score", "nan", "--json"], ["search", "x", "--js"]):
+        code, _ = run(capsys, argv, never)
+        assert code == cli.EXIT_USAGE
+
+    def cut(request, timeout):
+        raise http.client.IncompleteRead(b"")
+
+    monkeypatch.setattr(cli.urllib.request, "urlopen", cut)
+    with pytest.raises(cli.UnavailableError):
+        cli.http_fetch("GET", "/api/search")

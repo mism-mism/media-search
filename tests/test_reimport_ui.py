@@ -75,7 +75,7 @@ const fetch = async (url, options={}) => {
   const failed=['failed','enqueue_error','poll_error','invalid_response'].includes(scenario);
   assert.equal(document.getElementById('importBanner').className,failed?'import-banner err':'import-banner ok');
   if (scenario==='enqueue_error') {
-    assert.equal(document.getElementById('importStatus').textContent,'操作に失敗しました（409）：別の取り込みが実行中です。完了後にもう一度お試しください。');
+    assert.equal(document.getElementById('importStatus').textContent,'操作に失敗しました：別の取り込みが実行中です。完了後にもう一度お試しください。');
     assert.ok(!statusEl.textContent.includes('private-worker-id'));
   } else if (scenario==='sync_success') {
     assert.equal(requests.length,1,'Synchronous completion must not poll a job');

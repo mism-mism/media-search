@@ -13,7 +13,9 @@ from __future__ import annotations
 import argparse
 import base64
 import html
+import http.client
 import json
+import math
 import os
 import sys
 import time
@@ -49,6 +51,13 @@ class UsageError(Exception):
     pass
 
 
+def _finite(text: str) -> float:
+    value = float(text)
+    if not math.isfinite(value):  # nan compares false with every score and would silently drop all hits
+        raise ValueError(text)
+    return value
+
+
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str):
         raise UsageError(message)
@@ -63,7 +72,7 @@ def http_fetch(method: str, path: str) -> bytes:
             return response.read()
     except urllib.error.HTTPError as exc:
         raise ApiError(exc.code) from None
-    except OSError:  # URLError (refused, DNS) and socket timeouts
+    except (OSError, http.client.HTTPException):  # URLError (refused, DNS), socket timeouts, a body cut short
         raise UnavailableError() from None
 
 
@@ -82,7 +91,7 @@ def render_html(query: str, hits: list[dict]) -> str:
     items = "".join(
         f'<figure><img src="data:image/jpeg;base64,{h["thumbnail"]}" alt="{e(h["display_name"])}">'
         f'<figcaption><strong>{i}. {e(h["display_name"])}</strong><br>{e(" / ".join(h["tags"][:6]))}'
-        f'<br><small>{e(h["asset_id"])}・{h["score"]:.3f}</small></figcaption></figure>'
+        f"</figcaption></figure>"
         for i, h in enumerate(hits, 1)
         if h["thumbnail"]
     )
@@ -165,17 +174,18 @@ def main(argv: list[str] | None = None, fetch=http_fetch) -> int:
         print(json.dumps(body, ensure_ascii=False) if as_json else f"エラー: {error} {extra.get('message', '')}".rstrip(), file=sys.stdout if as_json else sys.stderr)
         return code
 
-    parser = _Parser(prog="media-search")
+    # No abbreviations: "--js" must not pass as --json while errors are still printed as plain text.
+    parser = _Parser(prog="media-search", allow_abbrev=False)
     sub = parser.add_subparsers(dest="command", required=True)
-    s = sub.add_parser("search", help="text search")
+    s = sub.add_parser("search", help="text search", allow_abbrev=False)
     s.add_argument("query")
     s.add_argument("--top-k", type=int, default=10, choices=range(1, 51), metavar="N")
     s.add_argument("--media-type", choices=("image", "video"))
     s.add_argument("--tag", action="append", default=[], help="keep hits with this tag (repeatable)")
     s.add_argument("--product-id", help="exact SKU")
-    s.add_argument("--min-score", type=float, help="drop hits scoring below this")
+    s.add_argument("--min-score", type=_finite, help="drop hits scoring below this")
     s.add_argument("--json", action="store_true")
-    i = sub.add_parser("import", help="import the configured media root")
+    i = sub.add_parser("import", help="import the configured media root", allow_abbrev=False)
     i.add_argument("--json", action="store_true")
     try:
         args = parser.parse_args(argv)
