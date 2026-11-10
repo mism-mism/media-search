@@ -455,7 +455,7 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
             detail = '別の取り込みが実行中です。完了後にもう一度お試しください。';
           }}
         }} catch (_) {{ /* Non-JSON failures still report their HTTP status. */ }}
-        throw new Error(`操作に失敗しました（${{res.status}}）${{detail ? '：' + detail : '。もう一度お試しください。'}}`);
+        throw new Error(`操作に失敗しました${{detail ? '：' + detail : '。もう一度お試しください。続くときは管理者に知らせてください。'}}`);
       }}
       return res.status === 204 ? null : res.json();
     }}
@@ -655,14 +655,14 @@ def _ui_html(*, embedder_mode: str, embedder_id: str) -> str:
     }}
     function assetCard(asset, search = false) {{
       const name = asset.display_name || asset.asset_id;
-      const url = '/api/assets/' + encodeURIComponent(asset.asset_id);
+      const url = '/media/' + asset.asset_id.split('/').map(encodeURIComponent).join('/');   // 押すと元の画像・動画が開く（生の JSON ではなく）
       const product = productCache.find(p => p.product_id === asset.product_id);
       const productLabel = product ? product.name : asset.product_id;
       return `<article class="asset-card">
         <a class="thumbnail" href="${{esc(url)}}" tabindex="-1" aria-hidden="true"><img src="${{esc(asset.thumbnail_url)}}" alt="" loading="lazy" /></a>
         <div class="asset-info">
           <div class="asset-name"><a href="${{esc(url)}}" title="${{esc(name)}}">${{esc(name)}}</a></div>
-          <p class="asset-caption"><span class="type-badge">${{asset.media_type === 'video' ? '動画' : '画像'}}</span>${{asset.product_id ? `<span data-product-caption="${{esc(asset.product_id)}}">${{esc(productLabel)}}</span>` : ''}}${{search ? '<span>関連度 ' + Number(asset.score).toFixed(4) + '</span>' : ''}}</p>
+          <p class="asset-caption"><span class="type-badge">${{asset.media_type === 'video' ? '動画' : '画像'}}</span>${{asset.product_id ? `<span data-product-caption="${{esc(asset.product_id)}}">${{esc(productLabel)}}</span>` : ''}}</p>
           ${{annotationHtml(asset)}}
           ${{categoryHtml(asset)}}
         </div>
