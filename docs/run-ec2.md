@@ -48,6 +48,8 @@ The CLI loads no model: it calls the resident service at `MEDIA_SEARCH_API`
 ```bash
 python -m media_search.cli search "白いボトル" --top-k 10 --json
 python -m media_search.cli import --json
+# filters: --media-type image|video, --tag <tag> (repeatable), --product-id <SKU>, --min-score <0..1>
+# errors with --json: {"error", "retryable"}; exit 75 = retry later, 64 = wrong command line, 2 = empty query, 1 = other
 ```
 
 - `search --json` → `{query, hits: [{asset_id, display_name, media_type, score, tags, thumbnail}], html}`.

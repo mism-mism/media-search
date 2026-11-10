@@ -55,6 +55,15 @@ runs the CLI as the `media` user.
   `FRAME_BACKEND=local`, `IMPORT_LOCK_BACKEND=fs`, no `MEDIA_SEARCH_DB_GCS`,
   `GEMINI_API_KEY` in `media.env`) and how the CLI is called. Unit tests cover
   AC1–AC3; the existing suite and lifecycle gates pass.
+- AC5. The CLI's caller is a program or an agent, so every failure tells it what to do
+  next. With `--json` every error is `{error, retryable}` on stdout: exit 75 with
+  `retryable: true` for a held import lock, a service that does not answer
+  (`service_unavailable`) and HTTP 502/503/504; exit 64 with `error: "usage"` and a
+  `message` for a wrong command line (never 2, which stays `empty_query`); exit 1
+  otherwise. `search` accepts the filters the API already has (`--media-type`,
+  `--tag` repeatable, `--product-id`) and `--min-score`, and each hit also carries
+  `product_id` and `match_kinds`. This supersedes "other failures exit 1" in AC3 for
+  the retryable cases only.
 
 ## Out of Scope
 

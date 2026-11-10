@@ -1,5 +1,8 @@
 """Thin CLI for the harness dispatcher (spec 020): search and import, optionally as JSON.
 
+Exit codes (the caller is a program or an agent): 0 ok, 75 retry later (``retryable: true``:
+import lock held, service down or 502/503/504), 64 wrong command line, 2 empty query, 1 anything else.
+
 It talks to the resident service (``MEDIA_SEARCH_API``, default http://127.0.0.1:3200)
 instead of loading its own model: one OpenCLIP model per box (the load peak is >2.5 GB).
 The dispatcher never reads the media folder, so ``search --json`` returns thumbnails and
@@ -22,7 +25,9 @@ from io import BytesIO
 from PIL import Image, ImageOps
 
 THUMBNAIL_PX = 512
-EXIT_BUSY = 75  # EX_TEMPFAIL: another import holds the lock
+EXIT_BUSY = 75  # EX_TEMPFAIL: another import holds the lock, or the service is not answering; retry later
+EXIT_USAGE = 64  # EX_USAGE: the caller built the command wrong; retrying the same command never helps
+RETRYABLE_HTTP = (502, 503, 504)
 IMPORT_TIMEOUT_S = 3600
 
 
@@ -36,6 +41,19 @@ class BusyError(Exception):
     pass
 
 
+class UnavailableError(Exception):
+    """The resident service did not answer (down, starting, timed out)."""
+
+
+class UsageError(Exception):
+    pass
+
+
+class _Parser(argparse.ArgumentParser):
+    def error(self, message: str):
+        raise UsageError(message)
+
+
 def http_fetch(method: str, path: str) -> bytes:
     base = os.environ.get("MEDIA_SEARCH_API", "http://127.0.0.1:3200").rstrip("/")
     request = urllib.request.Request(base + path, method=method)
@@ -45,6 +63,8 @@ def http_fetch(method: str, path: str) -> bytes:
             return response.read()
     except urllib.error.HTTPError as exc:
         raise ApiError(exc.code) from None
+    except OSError:  # URLError (refused, DNS) and socket timeouts
+        raise UnavailableError() from None
 
 
 def thumbnail(raw: bytes) -> str:
@@ -93,11 +113,15 @@ def _thumbnail_or_blank(fetch, url: str) -> str:
         return ""
 
 
-def search(fetch, query: str, top_k: int) -> dict:
+def search(fetch, query: str, top_k: int, *, media_type: str | None = None, tags: tuple[str, ...] = (),
+           product_id: str | None = None, min_score: float | None = None) -> dict:
     if not query.strip():
         raise ValueError("empty_query")
-    params = urllib.parse.urlencode({"q": query, "top_k": top_k})
+    filters = [("media_type", media_type), *(("tags", t) for t in tags), ("product_id", product_id)]
+    params = urllib.parse.urlencode([("q", query), ("top_k", top_k), *((k, v) for k, v in filters if v)])
     results = json.loads(fetch("GET", f"/api/search?{params}"))["results"]
+    if min_score is not None:
+        results = [r for r in results if float(r["score"]) >= min_score]
     rows = [
         {
             "asset_id": r["asset_id"],
@@ -105,6 +129,8 @@ def search(fetch, query: str, top_k: int) -> dict:
             "media_type": r["media_type"],
             "score": round(float(r["score"]), 4),
             "tags": _tags(r),
+            "product_id": r.get("product_id"),
+            "match_kinds": r.get("match_kinds") or [],
             "thumbnail": _thumbnail_or_blank(fetch, r["thumbnail_url"]),
         }
         for r in results
@@ -131,23 +157,35 @@ def import_media(fetch, *, poll_s: float = 2.0) -> dict:
 
 
 def main(argv: list[str] | None = None, fetch=http_fetch) -> int:
-    parser = argparse.ArgumentParser(prog="media-search")
+    argv = sys.argv[1:] if argv is None else argv
+    as_json = "--json" in argv
+
+    def fail(code: int, error: str, **extra) -> int:
+        body = {"error": error, "retryable": code == EXIT_BUSY, **extra}
+        print(json.dumps(body, ensure_ascii=False) if as_json else f"エラー: {error} {extra.get('message', '')}".rstrip(), file=sys.stdout if as_json else sys.stderr)
+        return code
+
+    parser = _Parser(prog="media-search")
     sub = parser.add_subparsers(dest="command", required=True)
     s = sub.add_parser("search", help="text search")
     s.add_argument("query")
     s.add_argument("--top-k", type=int, default=10, choices=range(1, 51), metavar="N")
+    s.add_argument("--media-type", choices=("image", "video"))
+    s.add_argument("--tag", action="append", default=[], help="keep hits with this tag (repeatable)")
+    s.add_argument("--product-id", help="exact SKU")
+    s.add_argument("--min-score", type=float, help="drop hits scoring below this")
     s.add_argument("--json", action="store_true")
     i = sub.add_parser("import", help="import the configured media root")
     i.add_argument("--json", action="store_true")
-    args = parser.parse_args(argv)
-
-    def fail(code: int, error: str) -> int:
-        print(json.dumps({"error": error}, ensure_ascii=False) if args.json else f"エラー: {error}", file=sys.stdout if args.json else sys.stderr)
-        return code
+    try:
+        args = parser.parse_args(argv)
+    except UsageError as exc:
+        return fail(EXIT_USAGE, "usage", message=str(exc))
 
     try:
         if args.command == "search":
-            result = search(fetch, args.query, args.top_k)
+            result = search(fetch, args.query, args.top_k, media_type=args.media_type, tags=tuple(args.tag),
+                            product_id=args.product_id, min_score=args.min_score)
             if args.json:
                 print(json.dumps(result, ensure_ascii=False))
             else:
@@ -159,7 +197,11 @@ def main(argv: list[str] | None = None, fetch=http_fetch) -> int:
         return 0
     except BusyError:
         return fail(EXIT_BUSY, "import_busy")
-    except (ApiError, TimeoutError, RuntimeError) as exc:
+    except UnavailableError:
+        return fail(EXIT_BUSY, "service_unavailable")
+    except ApiError as exc:
+        return fail(EXIT_BUSY if exc.status in RETRYABLE_HTTP else 1, str(exc))
+    except (TimeoutError, RuntimeError) as exc:
         # Only our own short codes (http_503, import_failed, ...); never a provider body
         known = str(exc) if str(exc).startswith(("http_", "import_")) else type(exc).__name__
         return fail(1, known)

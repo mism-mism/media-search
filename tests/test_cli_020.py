@@ -55,7 +55,7 @@ def test_import_then_search_returns_thumbnails_and_one_escaped_html_page(capsys,
     assert result["query"] == "white <bottle>"
     assert {h["asset_id"] for h in result["hits"]} == {"white <bottle>.png", "black.jpg"}
     hit = next(h for h in result["hits"] if h["asset_id"] == "white <bottle>.png")
-    assert set(hit) == {"asset_id", "display_name", "media_type", "score", "tags", "thumbnail"}
+    assert set(hit) == {"asset_id", "display_name", "media_type", "score", "tags", "product_id", "match_kinds", "thumbnail"}
     thumb = Image.open(BytesIO(base64.b64decode(hit["thumbnail"])))
     assert thumb.format == "JPEG" and max(thumb.size) <= cli.THUMBNAIL_PX
     page = result["html"]
@@ -132,28 +132,40 @@ def test_busy_lock_exits_75_and_failures_print_no_traceback(capsys, fetch):
         raise cli.ApiError(409)
 
     code, out = run(capsys, ["import", "--json"], busy)
-    assert code == 75 and json.loads(out) == {"error": "import_busy"}, "EX_TEMPFAIL: the dispatcher retries later"
+    assert code == 75 and json.loads(out) == {"error": "import_busy", "retryable": True}, "EX_TEMPFAIL: the dispatcher retries later"
 
     def failed_job(method, path):
         return json.dumps({"job_id": "j1", "status": "failed", "error": "provider body"}).encode()
 
     code, out = run(capsys, ["import", "--json"], failed_job)
-    assert code == 1 and json.loads(out) == {"error": "import_failed"}, "a failed job is not reported as an empty success"
+    assert code == 1 and json.loads(out) == {"error": "import_failed", "retryable": False}, "a failed job is not reported as an empty success"
 
     def broken(method, path):
         raise RuntimeError("provider said: secret body")
 
     code, out = run(capsys, ["search", "x", "--json"], broken)
-    assert code == 1 and json.loads(out) == {"error": "RuntimeError"}, "no provider body or traceback on stdout"
+    assert code == 1 and json.loads(out) == {"error": "RuntimeError", "retryable": False}, "no provider body or traceback on stdout"
 
     def down(method, path):
         raise cli.ApiError(503)
 
     code, out = run(capsys, ["search", "x", "--json"], down)
-    assert code == 1 and json.loads(out) == {"error": "http_503"}
+    assert code == 75 and json.loads(out) == {"error": "http_503", "retryable": True}, "a service that is starting is worth a retry"
+
+    def refused(method, path):
+        raise cli.UnavailableError()
+
+    code, out = run(capsys, ["search", "x", "--json"], refused)
+    assert code == 75 and json.loads(out) == {"error": "service_unavailable", "retryable": True}
+
+    def bad_request(method, path):
+        raise cli.ApiError(400)
+
+    code, out = run(capsys, ["search", "x", "--json"], bad_request)
+    assert code == 1 and json.loads(out) == {"error": "http_400", "retryable": False}
 
     code, out = run(capsys, ["search", "   ", "--json"], fetch)
-    assert code == 2 and json.loads(out) == {"error": "empty_query"}
+    assert code == 2 and json.loads(out) == {"error": "empty_query", "retryable": False}
 
 
 def test_import_waits_for_the_async_job(monkeypatch):
@@ -166,3 +178,40 @@ def test_import_waits_for_the_async_job(monkeypatch):
 
     assert cli.import_media(fake, poll_s=0) == {"imported": ["x.png"], "updated": [], "skipped": []}
     assert seen == [("POST", "/api/import"), ("GET", "/api/import/jobs/j%2F1"), ("GET", "/api/import/jobs/j%2F1")]
+
+
+def test_a_wrong_command_line_is_json_too_and_never_looks_like_an_empty_query(capsys, fetch):
+    """AC5: argparse used to exit 2 with plain text, the same code as empty_query."""
+    for argv in (["search", "x", "--top-k", "99", "--json"], ["search", "--json"], ["search", "x", "--json", "--media-type", "audio"]):
+        code, out = run(capsys, argv, fetch)
+        body = json.loads(out)
+        assert code == 64 and body["error"] == "usage" and body["retryable"] is False and body["message"], argv
+
+
+def test_search_passes_filters_to_the_api_and_reports_why_a_hit_matched(capsys):
+    """AC5: filters the API already has, and the fields an agent needs to judge a hit."""
+    seen = []
+
+    def fake(method, path):
+        seen.append(path)
+        return json.dumps({"results": [
+            {"asset_id": "a.png", "media_type": "image", "score": 0.31, "thumbnail_url": "/t", "product_id": "SKU-1", "match_kinds": ["text"]},
+            {"asset_id": "b.png", "media_type": "image", "score": 0.12, "thumbnail_url": "/t"},
+        ]}).encode() if path.startswith("/api/search") else b""
+
+    code, out = run(capsys, ["search", "白", "--media-type", "image", "--tag", "ボトル", "--tag", "白", "--product-id", "SKU-1", "--min-score", "0.2", "--json"], fake)
+    hits = json.loads(out)["hits"]
+    assert code == 0 and [(h["asset_id"], h["product_id"], h["match_kinds"]) for h in hits] == [("a.png", "SKU-1", ["text"])]
+    query = dict.fromkeys(["media_type=image", "product_id=SKU-1", "top_k=10"])
+    assert all(part in seen[0] for part in query) and seen[0].count("tags=") == 2
+
+
+def test_http_fetch_reports_a_dead_service_as_unavailable(monkeypatch):
+    import urllib.error
+
+    def urlopen(request, timeout):
+        raise urllib.error.URLError("refused")
+
+    monkeypatch.setattr(cli.urllib.request, "urlopen", urlopen)
+    with pytest.raises(cli.UnavailableError):
+        cli.http_fetch("GET", "/api/search")
